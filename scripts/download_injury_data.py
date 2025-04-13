@@ -2,6 +2,8 @@ import sys
 from pathlib import Path
 import pandas as pd
 import nfl_data_py as nfl
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Add the project root to the Python path
 project_root = Path(__file__).parent.parent
@@ -49,6 +51,26 @@ def download_injury_data():
                 if col in injury_data.columns:
                     logger.info(f"\nInjuries by {col}:")
                     logger.info(injury_data[col].value_counts().head())
+            
+            if 'plays_df' not in locals():
+                print("Error: plays_df DataFrame not found. Please load the data first.")
+            else:
+                # Check for required columns
+                required_columns = ['down', 'yards_to_go']
+                missing_columns = [col for col in required_columns if col not in plays_df.columns]
+                
+                if missing_columns:
+                    print(f"Missing required columns: {missing_columns}")
+                    print("Available columns:", plays_df.columns.tolist())
+                else:
+                    # All required columns exist, proceed with visualization
+                    plt.figure(figsize=(12, 6))
+                    sns.boxplot(x='down', y='yards_to_go', data=plays_df)
+                    plt.title('Distribution of Yards to Go by Down')
+                    plt.xlabel('Down')
+                    plt.ylabel('Yards to Go')
+                    plt.tight_layout()
+                    plt.show()
             
         else:
             logger.error("No injury data was downloaded")

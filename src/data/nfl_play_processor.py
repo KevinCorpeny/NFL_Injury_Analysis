@@ -35,6 +35,47 @@ class NFLPlayProcessor(BaseDataProcessor):
             logger.error(f"Error loading NFL play data: {str(e)}")
             raise
     
+    def _downcast_floats(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Downcast float columns to reduce memory usage.
+        
+        Args:
+            df: Input DataFrame
+            
+        Returns:
+            DataFrame with downcasted float columns
+        """
+        # Get float columns
+        float_cols = df.select_dtypes(include=['float64']).columns
+        
+        if len(float_cols) > 0:
+            logger.info(f"Downcasting {len(float_cols)} float columns")
+            
+            # Calculate memory usage before downcasting
+            memory_before = df[float_cols].memory_usage(deep=True).sum() / 1024**2  # MB
+            
+            # Downcast floats
+            for col in float_cols:
+                # Get min and max values
+                col_min = df[col].min()
+                col_max = df[col].max()
+                
+                # Determine appropriate float type
+                if col_min >= -32768 and col_max <= 32767:
+                    # Use float16 if values fit in range
+                    df[col] = df[col].astype('float16')
+                elif col_min >= -3.4e38 and col_max <= 3.4e38:
+                    # Use float32 if values fit in range
+                    df[col] = df[col].astype('float32')
+                # Otherwise keep as float64
+            
+            # Calculate memory usage after downcasting
+            memory_after = df[float_cols].memory_usage(deep=True).sum() / 1024**2  # MB
+            memory_saved = memory_before - memory_after
+            
+            logger.info(f"Memory saved through float downcasting: {memory_saved:.2f} MB")
+        
+        return df
+    
     def process_data(self) -> pd.DataFrame:
         """Process NFL play-by-play data.
         
@@ -69,6 +110,9 @@ class NFLPlayProcessor(BaseDataProcessor):
             
             # Handle missing values
             df = self._handle_missing_values(df)
+            
+            # Downcast float columns
+            df = self._downcast_floats(df)
             
             # Validate processed data
             if not self.validate_data(df):

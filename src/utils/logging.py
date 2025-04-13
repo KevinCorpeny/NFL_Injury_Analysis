@@ -3,6 +3,41 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+def setup_logging(
+    log_file: Optional[str] = None,
+    level: int = logging.INFO,
+    format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+) -> None:
+    """Set up the root logger with console and optional file output.
+    
+    Args:
+        log_file: Optional path to log file
+        level: Logging level
+        format: Log message format
+    """
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+    
+    # Remove any existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    formatter = logging.Formatter(format)
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+    
+    # File handler if log_file is specified
+    if log_file:
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+
 def setup_logger(
     name: str,
     log_file: Optional[str] = None,

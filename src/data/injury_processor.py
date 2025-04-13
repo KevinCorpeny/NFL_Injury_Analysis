@@ -148,8 +148,80 @@ class InjuryProcessor(BaseProcessor):
         if missing_after.sum() > 0:
             logger.warning(f"Remaining missing values after handling:\n{missing_after[missing_after > 0]}")
     
+    def _calculate_games_played(self) -> None:
+        """Calculate the number of games played before injury for each player in each season.
+        Accounts for bye weeks and different types of absences."""
+        if not all(col in self.injury_data.columns for col in ['player_name', 'team', 'season', 'week']):
+            logger.warning("Required columns missing for games played calculation")
+            return
+
+        # Sort data by player, season, and week
+        self.injury_data = self.injury_data.sort_values(['player_name', 'team', 'season', 'week'])
+        
+        # Define types of absences that should not count as games played
+        non_game_absences = [
+            'Bye Week',
+            'Illness',
+            'Not Injury Related',
+            'Personal',
+            'Coach\'s Decision',
+            'Not Listed'
+        ]
+        
+        # Group by player, team, and season to calculate games played
+        def calc_games_played(group):
+            group = group.copy()
+            
+            # Initialize games played counter
+            games_played = 0
+            
+            # Create a list to track games played for each week
+            games_played_by_week = []
+            
+            # Iterate through weeks to calculate cumulative games played
+            for week in range(1, 18):  # NFL regular season is 17 weeks
+                if week < group['week'].min():
+                    # Before first injury, count as games played
+                    games_played += 1
+                elif week == group['week'].min():
+                    # At injury week, don't count as played
+                    pass
+                else:
+                    # After injury, check if player was active
+                    week_data = group[group['week'] == week]
+                    if not week_data.empty:
+                        status = week_data['game_status'].iloc[0]
+                        practice_status = week_data['practice_status'].iloc[0]
+                        
+                        # Don't count if player was inactive for non-game reasons
+                        if status in non_game_absences or practice_status in non_game_absences:
+                            pass
+                        else:
+                            games_played += 1
+                
+                games_played_by_week.append(games_played)
+            
+            # Add the games played count to the injury record
+            group['games_played_before_injury'] = games_played_by_week[group['week'].iloc[0] - 1]
+            
+            # Add additional tracking metrics
+            group['total_season_games'] = games_played_by_week[-1]  # Total games played in season
+            group['games_after_injury'] = group['total_season_games'] - group['games_played_before_injury']
+            
+            # Calculate injury timing metrics
+            group['injury_week_percentage'] = group['week'] / 17  # Percentage through season
+            group['games_played_percentage'] = group['games_played_before_injury'] / group['total_season_games']
+            
+            return group
+
+        self.injury_data = self.injury_data.groupby(['player_name', 'team', 'season'], as_index=False).apply(calc_games_played)
+        logger.info("Added enhanced games played calculation with bye week and absence tracking")
+
     def _add_derived_features(self) -> None:
         """Add derived features to the injury data."""
+        # Calculate games played before injury with enhanced tracking
+        self._calculate_games_played()
+
         # Add injury severity if not already present
         if 'injury_severity' not in self.injury_data.columns and 'game_status' in self.injury_data.columns:
             status_map = {
