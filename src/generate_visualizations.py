@@ -70,9 +70,9 @@ def main():
         # Get total plays by quarter
         quarter_stats = plays_data.groupby('quarter').size().reset_index(name='total_plays')
         
-        # Get unique injuries by game and quarter
+        # Get injuries by game and quarter
         injuries_with_quarter = injuries_data[['game_id']].merge(
-            plays_data[['game_id', 'quarter']].drop_duplicates(),
+            plays_data[['game_id', 'quarter']],
             on='game_id',
             how='left'
         )
@@ -93,9 +93,9 @@ def main():
         # Get total plays by down
         down_stats = plays_data.groupby('down').size().reset_index(name='total_plays')
         
-        # Get unique injuries by game and down
+        # Get injuries by game and down
         injuries_with_down = injuries_data[['game_id']].merge(
-            plays_data[['game_id', 'down']].drop_duplicates(),
+            plays_data[['game_id', 'down']],
             on='game_id',
             how='left'
         )
@@ -118,7 +118,7 @@ def main():
         plays_data['score_differential_bin'] = pd.cut(
             plays_data['score_differential'],
             bins=score_bins,
-            labels=[f"{score_bins[i]}-{score_bins[i+1]}" for i in range(len(score_bins)-1)],
+            labels=[f"{score_bins[i]} to {score_bins[i+1]}" for i in range(len(score_bins)-1)],
             include_lowest=True
         )
         
