@@ -112,10 +112,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- nflfastR team for providing comprehensive NFL data
-- NFL for making injury data publicly available
-- Contributors and maintainers of the Python data science ecosystem 
+- NFL data provided by [NFLverse](https://nflverse.nflverse.com/)
+- Special thanks to all contributors and maintainers of the open-source libraries used in this project 
