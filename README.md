@@ -37,6 +37,11 @@ nfl_injury_analysis/
 - Configurable processing parameters
 - Comprehensive logging system
 - Modular and extensible architecture
+- Advanced data visualizations:
+  - Time trend analysis with playoff period indicators
+  - Game situation analysis (quarter, down, score differential)
+  - Dual-axis plots showing injury rates and play counts
+  - Customizable plot styling and formatting
 
 ## Setup
 
@@ -71,7 +76,13 @@ python scripts/download_injury_data.py
 python run_processing.py
 ```
 
-3. Explore the data using Jupyter notebooks in the `notebooks/` directory.
+3. Generate visualizations:
+```bash
+python run_visualizations.py
+```
+The visualizations will be saved in the `reports/figures/` directory.
+
+4. Explore the data using Jupyter notebooks in the `notebooks/` directory.
 
 ## Data Sources
 
@@ -100,6 +111,9 @@ python run_processing.py
    - Examine injury patterns across seasons
    - Analyze weekly injury trends
    - Study the impact of scheduling on injury rates
+   - Distinguish between regular season and playoff injury patterns
+   - Track total play counts and their relationship with injury rates
+   - Identify seasonal transitions and their effects on injury statistics
 
 4. **Predictive Analysis**
    - Investigate correlation between play characteristics and injury likelihood
