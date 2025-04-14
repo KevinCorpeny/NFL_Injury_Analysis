@@ -67,52 +67,57 @@ def main():
         
         # 1. Quarter analysis
         logger.info("📊 Calculating injury rates by quarter...")
-        # Get total plays by quarter
-        quarter_stats = plays_data.groupby('quarter').size().reset_index(name='total_plays')
         
-        # Get injuries by game and quarter
-        injuries_with_quarter = injuries_data[['game_id']].merge(
-            plays_data[['game_id', 'quarter']],
-            on='game_id',
-            how='left'
-        )
+        # Calculate total plays and injuries per week/season
+        plays_by_week = plays_data.groupby(['season', 'week']).size().reset_index(name='total_plays_week')
+        injuries_by_week = injuries_data.groupby(['season', 'week']).size().reset_index(name='total_injuries_week')
         
-        # Count injuries by quarter
-        quarter_injuries = injuries_with_quarter.groupby('quarter').size().reset_index(name='injury_count')
+        # Calculate plays by quarter for each week/season
+        quarter_by_week = plays_data.groupby(['season', 'week', 'quarter']).size().reset_index(name='plays_in_quarter')
         
-        # Merge and calculate rates
-        quarter_data = pd.merge(quarter_stats, quarter_injuries, on='quarter', how='left')
-        quarter_data['injury_count'] = quarter_data['injury_count'].fillna(0)
+        # Merge with total plays and injuries
+        quarter_merged = quarter_by_week.merge(plays_by_week, on=['season', 'week'])
+        quarter_merged = quarter_merged.merge(injuries_by_week, on=['season', 'week'])
+        
+        # Calculate proportion of plays in each quarter and distribute injuries
+        quarter_merged['proportion'] = quarter_merged['plays_in_quarter'] / quarter_merged['total_plays_week']
+        quarter_merged['injuries'] = quarter_merged['proportion'] * quarter_merged['total_injuries_week']
+        
+        # Aggregate by quarter
+        quarter_data = quarter_merged.groupby('quarter').agg({
+            'plays_in_quarter': 'sum',
+            'injuries': 'sum'
+        }).reset_index()
+        
+        quarter_data.columns = ['quarter', 'total_plays', 'injury_count']
         quarter_data['injury_rate'] = (quarter_data['injury_count'] / quarter_data['total_plays']) * 1000
-        
-        # Free memory
-        del injuries_with_quarter, quarter_injuries
         
         # 2. Down analysis
         logger.info("📊 Calculating injury rates by down...")
-        # Get total plays by down
-        down_stats = plays_data.groupby('down').size().reset_index(name='total_plays')
         
-        # Get injuries by game and down
-        injuries_with_down = injuries_data[['game_id']].merge(
-            plays_data[['game_id', 'down']],
-            on='game_id',
-            how='left'
-        )
+        # Calculate plays by down for each week/season
+        down_by_week = plays_data.groupby(['season', 'week', 'down']).size().reset_index(name='plays_in_down')
         
-        # Count injuries by down
-        down_injuries = injuries_with_down.groupby('down').size().reset_index(name='injury_count')
+        # Merge with total plays and injuries
+        down_merged = down_by_week.merge(plays_by_week, on=['season', 'week'])
+        down_merged = down_merged.merge(injuries_by_week, on=['season', 'week'])
         
-        # Merge and calculate rates
-        down_data = pd.merge(down_stats, down_injuries, on='down', how='left')
-        down_data['injury_count'] = down_data['injury_count'].fillna(0)
+        # Calculate proportion of plays in each down and distribute injuries
+        down_merged['proportion'] = down_merged['plays_in_down'] / down_merged['total_plays_week']
+        down_merged['injuries'] = down_merged['proportion'] * down_merged['total_injuries_week']
+        
+        # Aggregate by down
+        down_data = down_merged.groupby('down').agg({
+            'plays_in_down': 'sum',
+            'injuries': 'sum'
+        }).reset_index()
+        
+        down_data.columns = ['down', 'total_plays', 'injury_count']
         down_data['injury_rate'] = (down_data['injury_count'] / down_data['total_plays']) * 1000
-        
-        # Free memory
-        del injuries_with_down, down_injuries
         
         # 3. Score differential analysis
         logger.info("📊 Calculating injury rates by score differential...")
+        
         # Create score differential bins
         score_bins = [-50, -20, -10, -5, 0, 5, 10, 20, 50]
         plays_data['score_differential_bin'] = pd.cut(
@@ -122,29 +127,29 @@ def main():
             include_lowest=True
         )
         
-        # Get total plays by score differential bin
-        score_stats = plays_data.groupby('score_differential_bin').size().reset_index(name='total_plays')
+        # Calculate plays by score differential for each week/season
+        score_by_week = plays_data.groupby(['season', 'week', 'score_differential_bin']).size().reset_index(name='plays_in_score')
         
-        # Get unique injuries by game and score differential
-        injuries_with_score = injuries_data[['game_id']].merge(
-            plays_data[['game_id', 'score_differential_bin']].drop_duplicates(),
-            on='game_id',
-            how='left'
-        )
+        # Merge with total plays and injuries
+        score_merged = score_by_week.merge(plays_by_week, on=['season', 'week'])
+        score_merged = score_merged.merge(injuries_by_week, on=['season', 'week'])
         
-        # Count injuries by score differential bin
-        score_injuries = injuries_with_score.groupby('score_differential_bin').size().reset_index(name='injury_count')
+        # Calculate proportion of plays in each score differential and distribute injuries
+        score_merged['proportion'] = score_merged['plays_in_score'] / score_merged['total_plays_week']
+        score_merged['injuries'] = score_merged['proportion'] * score_merged['total_injuries_week']
         
-        # Merge and calculate rates
-        score_data = pd.merge(score_stats, score_injuries, on='score_differential_bin', how='left')
-        score_data['injury_count'] = score_data['injury_count'].fillna(0)
+        # Aggregate by score differential
+        score_data = score_merged.groupby('score_differential_bin').agg({
+            'plays_in_score': 'sum',
+            'injuries': 'sum'
+        }).reset_index()
+        
+        score_data.columns = ['score_differential_bin', 'total_plays', 'injury_count']
         score_data['injury_rate'] = (score_data['injury_count'] / score_data['total_plays']) * 1000
-        
-        # Free memory
-        del injuries_with_score, score_injuries
         
         # 4. Time remaining analysis
         logger.info("📊 Calculating injury rates by time remaining...")
+        
         # Create time remaining bins
         time_bins = [0, 900, 1800, 2700, 3600]  # 15-minute intervals
         plays_data['time_remaining_bin'] = pd.cut(
@@ -153,26 +158,25 @@ def main():
             labels=['0-15', '15-30', '30-45', '45-60']
         )
         
-        # Get total plays by time remaining bin
-        time_stats = plays_data.groupby('time_remaining_bin').size().reset_index(name='total_plays')
+        # Calculate plays by time remaining for each week/season
+        time_by_week = plays_data.groupby(['season', 'week', 'time_remaining_bin']).size().reset_index(name='plays_in_time')
         
-        # Get unique injuries by game and time remaining
-        injuries_with_time = injuries_data[['game_id']].merge(
-            plays_data[['game_id', 'time_remaining_bin']].drop_duplicates(),
-            on='game_id',
-            how='left'
-        )
+        # Merge with total plays and injuries
+        time_merged = time_by_week.merge(plays_by_week, on=['season', 'week'])
+        time_merged = time_merged.merge(injuries_by_week, on=['season', 'week'])
         
-        # Count injuries by time remaining bin
-        time_injuries = injuries_with_time.groupby('time_remaining_bin').size().reset_index(name='injury_count')
+        # Calculate proportion of plays in each time bin and distribute injuries
+        time_merged['proportion'] = time_merged['plays_in_time'] / time_merged['total_plays_week']
+        time_merged['injuries'] = time_merged['proportion'] * time_merged['total_injuries_week']
         
-        # Merge and calculate rates
-        time_data = pd.merge(time_stats, time_injuries, on='time_remaining_bin', how='left')
-        time_data['injury_count'] = time_data['injury_count'].fillna(0)
+        # Aggregate by time remaining
+        time_data = time_merged.groupby('time_remaining_bin').agg({
+            'plays_in_time': 'sum',
+            'injuries': 'sum'
+        }).reset_index()
+        
+        time_data.columns = ['time_remaining_bin', 'total_plays', 'injury_count']
         time_data['injury_rate'] = (time_data['injury_count'] / time_data['total_plays']) * 1000
-        
-        # Free memory
-        del injuries_with_time, time_injuries
         
         # Log statistics in a readable format
         logger.info("\n📊 Game Situation Statistics")
@@ -197,73 +201,63 @@ def main():
         logger.info("\n🎨 Preparing data for visualization...")
         
         # Calculate injury rate for trend plot
-        trend_data = plays_data[['game_id']].copy()
-        trend_data['time_index'] = trend_data['game_id'].str.replace('_', ' ')
+        trend_data = plays_data.groupby(['season', 'week']).size().reset_index(name='total_plays')
         
-        # Get total plays by time index
-        trend_stats = trend_data.groupby('time_index').size().reset_index(name='total_plays')
+        # Create time index that can be properly converted to numeric values
+        trend_data['time_index'] = trend_data['season'].astype(str) + ' ' + trend_data['week'].astype(str).str.zfill(2)
         
         # Get injuries by time index
-        trend_injuries = injuries_data.groupby('game_id').size().reset_index(name='injury_count')
-        trend_injuries['time_index'] = trend_injuries['game_id'].str.replace('_', ' ')
+        trend_injuries = injuries_data.groupby(['season', 'week']).size().reset_index(name='injury_count')
         
         # Merge and calculate rates
-        trend_data = pd.merge(trend_stats, trend_injuries[['time_index', 'injury_count']], on='time_index', how='left')
+        trend_data = pd.merge(
+            trend_data,
+            trend_injuries[['season', 'week', 'injury_count']],
+            on=['season', 'week'],
+            how='left'
+        )
         trend_data['injury_count'] = trend_data['injury_count'].fillna(0)
         trend_data['injury_rate'] = (trend_data['injury_count'] / trend_data['total_plays']) * 1000
         
         # Sort by time index
-        trend_data = trend_data.sort_values('time_index')
+        trend_data = trend_data.sort_values(['season', 'week'])
         
         # Free memory
-        del trend_stats, trend_injuries
+        del trend_injuries
         
         # Create plot data for game situation plots
-        plot_data = plays_data[['quarter', 'down', 'score_differential_bin', 'time_remaining_bin']].copy()
+        # Create separate dataframes for each situation type
+        quarter_plot_data = quarter_data.copy()
+        quarter_plot_data['situation'] = 'quarter'
+        quarter_plot_data['value'] = quarter_plot_data['quarter']
+        quarter_plot_data['injury_rate'] = quarter_plot_data['injury_rate']
+        quarter_plot_data['play_count'] = quarter_plot_data['total_plays']
         
-        # Merge with calculated rates
-        plot_data = pd.merge(
-            plot_data,
-            quarter_data[['quarter', 'injury_rate']].rename(columns={'injury_rate': 'injury_rate_quarter'}),
-            on='quarter',
-            how='left'
-        )
-        plot_data = pd.merge(
-            plot_data,
-            down_data[['down', 'injury_rate']].rename(columns={'injury_rate': 'injury_rate_down'}),
-            on='down',
-            how='left'
-        )
-        plot_data = pd.merge(
-            plot_data,
-            score_data[['score_differential_bin', 'injury_rate']].rename(columns={'injury_rate': 'injury_rate_score'}),
-            on='score_differential_bin',
-            how='left'
-        )
-        plot_data = pd.merge(
-            plot_data,
-            time_data[['time_remaining_bin', 'injury_rate']].rename(columns={'injury_rate': 'injury_rate_time'}),
-            on='time_remaining_bin',
-            how='left'
-        )
+        down_plot_data = down_data.copy()
+        down_plot_data['situation'] = 'down'
+        down_plot_data['value'] = down_plot_data['down']
+        down_plot_data['injury_rate'] = down_plot_data['injury_rate']
+        down_plot_data['play_count'] = down_plot_data['total_plays']
         
-        # Add numeric columns for regression plots
-        def convert_bin_to_numeric(bin_value):
-            if pd.isna(bin_value) or str(bin_value).strip() == '':
-                return np.nan
-            try:
-                if '-' in str(bin_value):
-                    parts = str(bin_value).split('-')
-                    if len(parts) == 2:
-                        lower, upper = parts
-                        if lower.strip() and upper.strip():
-                            return (float(lower.strip()) + float(upper.strip())) / 2
-            except (ValueError, IndexError):
-                pass
-            return np.nan
-
-        plot_data['score_differential_numeric'] = plot_data['score_differential_bin'].apply(convert_bin_to_numeric)
-        plot_data['time_remaining_numeric'] = plot_data['time_remaining_bin'].apply(convert_bin_to_numeric)
+        score_plot_data = score_data.copy()
+        score_plot_data['situation'] = 'score_differential'
+        score_plot_data['value'] = score_plot_data['score_differential_bin']
+        score_plot_data['injury_rate'] = score_plot_data['injury_rate']
+        score_plot_data['play_count'] = score_plot_data['total_plays']
+        
+        time_plot_data = time_data.copy()
+        time_plot_data['situation'] = 'time_remaining'
+        time_plot_data['value'] = time_plot_data['time_remaining_bin']
+        time_plot_data['injury_rate'] = time_plot_data['injury_rate']
+        time_plot_data['play_count'] = time_plot_data['total_plays']
+        
+        # Combine all situation data
+        plot_data = pd.concat([
+            quarter_plot_data[['situation', 'value', 'injury_rate', 'play_count']],
+            down_plot_data[['situation', 'value', 'injury_rate', 'play_count']],
+            score_plot_data[['situation', 'value', 'injury_rate', 'play_count']],
+            time_plot_data[['situation', 'value', 'injury_rate', 'play_count']]
+        ], ignore_index=True)
         
         # Generate visualizations
         logger.info("\n🖼️ Generating visualizations...")

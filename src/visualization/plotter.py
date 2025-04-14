@@ -132,67 +132,77 @@ class NFLPlotter:
             data = data.sort_values('time_numeric')
             
             # Create figure with specific style
-            plt.style.use('seaborn-v0_8')  # Use a valid style
-            fig, ax = plt.subplots(figsize=(12, 8))
+            plt.style.use('seaborn-v0_8')
+            fig, ax1 = plt.subplots(figsize=(12, 8))
             
             # Set background color
-            ax.set_facecolor('#f0f0f0')
+            ax1.set_facecolor('#f0f0f0')
             fig.patch.set_facecolor('white')
             
-            # Plot injury rate over time with a thicker line and larger markers
-            sns.lineplot(
-                x='time_numeric', 
-                y='injury_rate', 
-                data=data, 
-                ax=ax,
-                marker='o',
-                markersize=8,
-                linewidth=2.5,
-                color='#2077B4',  # A nice blue color
-                label='Injury Rate'
-            )
+            # Create second y-axis for total plays
+            ax2 = ax1.twinx()
             
-            # Add trend line
-            z = np.polyfit(data['time_numeric'], data['injury_rate'], 1)
-            p = np.poly1d(z)
-            ax.plot(data['time_numeric'], p(data['time_numeric']), 
-                   linestyle='--', color='#FF4B4B', alpha=0.7, linewidth=2,
-                   label=f'Trend (slope: {z[0]:.1f} per year)')
+            # Plot injury rate (blue line)
+            line1 = ax1.plot(data['time_numeric'], data['injury_rate'], 
+                           color='#2077B4', linewidth=2.5, marker='o', 
+                           markersize=6, label='Injury Rate')
+            
+            # Plot total plays (red line)
+            line2 = ax2.plot(data['time_numeric'], data['total_plays'],
+                           color='#FF4B4B', linewidth=2, linestyle='-',
+                           alpha=0.7, label='Total Plays')
+            
+            # Add vertical lines for playoff starts (Week 18 in each season)
+            seasons = sorted(data['time_index'].str.split().str[0].unique())
+            for season in seasons:
+                playoff_start = float(season) + 18/52  # Week 18 is when regular season ends
+                ax1.axvline(x=playoff_start, color='green', linestyle='--', alpha=0.5)
+                # Add text annotation
+                ax1.text(playoff_start + 0.02, ax1.get_ylim()[1], 'Playoffs Start',
+                        rotation=90, verticalalignment='top', color='green', alpha=0.7)
             
             # Customize x-axis
-            seasons = sorted(data['time_index'].str.split().str[0].unique())
-            ax.set_xticks([float(s) for s in seasons])
-            ax.set_xticklabels(seasons, rotation=45, ha='right')
+            ax1.set_xticks([float(s) for s in seasons])
+            ax1.set_xticklabels(seasons, rotation=45, ha='right')
             
-            # Add labels and title with better formatting
-            ax.set_xlabel('NFL Season', fontsize=12, fontweight='bold', labelpad=10)
-            ax.set_ylabel('Injuries per 1000 Plays', fontsize=12, fontweight='bold', labelpad=10)
-            ax.set_title('NFL Injury Rate Trend (2018-2022)', fontsize=14, fontweight='bold', pad=20)
+            # Add labels and title
+            ax1.set_xlabel('NFL Season', fontsize=12, fontweight='bold', labelpad=10)
+            ax1.set_ylabel('Injuries per 1000 Plays', fontsize=12, fontweight='bold', labelpad=10)
+            ax2.set_ylabel('Total Plays', fontsize=12, fontweight='bold', labelpad=10, color='#FF4B4B')
+            plt.title('NFL Injury Rate and Total Plays Over Time', fontsize=14, fontweight='bold', pad=20)
             
             # Customize grid
-            ax.grid(True, linestyle='--', alpha=0.3, color='gray')
+            ax1.grid(True, linestyle='--', alpha=0.3, color='gray')
             
-            # Add legend with better formatting
-            ax.legend(loc='upper left', frameon=True, framealpha=0.9, fontsize=10)
-            
-            # Adjust layout
-            plt.tight_layout()
-            
-            # Set y-axis limits with some padding
-            ymin = max(0, data['injury_rate'].min() * 0.9)
-            ymax = data['injury_rate'].max() * 1.1
-            ax.set_ylim(ymin, ymax)
+            # Add combined legend
+            lines = line1 + line2
+            labels = [l.get_label() for l in lines]
+            ax1.legend(lines, labels, loc='upper left', frameon=True, framealpha=0.9, fontsize=10)
             
             # Format y-axis ticks
-            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{int(x)}'))
+            ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{int(x)}'))
+            ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{int(x):,}'))
+            ax2.tick_params(axis='y', labelcolor='#FF4B4B')
+            
+            # Set y-axis limits with padding
+            ymin1 = max(0, data['injury_rate'].min() * 0.9)
+            ymax1 = data['injury_rate'].max() * 1.1
+            ax1.set_ylim(ymin1, ymax1)
+            
+            ymin2 = max(0, data['total_plays'].min() * 0.9)
+            ymax2 = data['total_plays'].max() * 1.1
+            ax2.set_ylim(ymin2, ymax2)
             
             # Add spines
-            for spine in ax.spines.values():
+            for spine in ax1.spines.values():
                 spine.set_color('#cccccc')
                 spine.set_linewidth(1)
             
             # Customize tick parameters
-            ax.tick_params(axis='both', which='major', labelsize=10)
+            ax1.tick_params(axis='both', which='major', labelsize=10)
+            ax2.tick_params(axis='y', which='major', labelsize=10)
+            
+            plt.tight_layout()
             
             return fig
             
@@ -238,20 +248,28 @@ class NFLPlotter:
         plt.style.use('seaborn-v0_8')
         
         # Create figure and subplots with more space between plots and at bottom
-        fig, axes = plt.subplots(2, 2, figsize=(15, 16))  # Increased height to 16
-        fig.suptitle('Injury Rates by Game Situation', fontsize=16, y=0.95)  # Moved title down
+        fig = plt.figure(figsize=(15, 16))  # Increased height to 16
+        gs = plt.GridSpec(2, 2, figure=fig, hspace=0.4, wspace=0.3)  # Increased spacing
+        axes = [
+            fig.add_subplot(gs[0, 0]),
+            fig.add_subplot(gs[0, 1]),
+            fig.add_subplot(gs[1, 0]),
+            fig.add_subplot(gs[1, 1])
+        ]
+        
+        fig.suptitle('Injury Rates by Game Situation', fontsize=16, y=0.95)  # Moved title up
         
         # Plot quarter data
         quarter_data = data[data['situation'] == 'quarter'].copy()
         quarter_data['value'] = quarter_data['value'].astype(float)
         quarter_data = quarter_data.sort_values('value')
         
-        sns.barplot(data=quarter_data, x='value', y='injury_rate', ax=axes[0, 0])
-        axes[0, 0].set_title('Injury Rate by Quarter', pad=10)
-        axes[0, 0].set_xlabel('Quarter')
-        axes[0, 0].set_ylabel('Injuries per 1000 Plays')
-        axes[0, 0].set_xticks(range(len(quarter_data)))
-        axes[0, 0].set_xticklabels([f'Q{int(q)}' for q in quarter_data['value']])
+        sns.barplot(data=quarter_data, x='value', y='injury_rate', ax=axes[0])
+        axes[0].set_title('Injury Rate by Quarter', pad=15)
+        axes[0].set_xlabel('Quarter', labelpad=10)
+        axes[0].set_ylabel('Injuries per 1000 Plays', labelpad=10)
+        axes[0].set_xticks(range(len(quarter_data)))
+        axes[0].set_xticklabels([f'Q{int(q)}' for q in quarter_data['value']])
         
         # Plot down data with dual axis
         down_data = data[data['situation'] == 'down'].copy()
@@ -259,43 +277,43 @@ class NFLPlotter:
         down_data = down_data.sort_values('value')
         
         # Create twin axis for play count
-        ax_plays = axes[0, 1].twinx()
+        ax_plays = axes[1].twinx()
         
         # Plot injury rate bars
-        sns.barplot(data=down_data, x='value', y='injury_rate', ax=axes[0, 1], color='#2077B4', alpha=0.7)
+        sns.barplot(data=down_data, x='value', y='injury_rate', ax=axes[1], color='#2077B4', alpha=0.7)
         # Plot play count line
         sns.lineplot(data=down_data, x=range(len(down_data)), y='play_count', ax=ax_plays, color='#FF4B4B', 
                     marker='o', linewidth=2, markersize=8)
         
-        axes[0, 1].set_title('Injury Rate and Play Count by Down', pad=10)
-        axes[0, 1].set_xlabel('Down')
-        axes[0, 1].set_ylabel('Injuries per 1000 Plays')
-        ax_plays.set_ylabel('Number of Plays', color='#FF4B4B')
+        axes[1].set_title('Injury Rate and Play Count by Down', pad=15)
+        axes[1].set_xlabel('Down', labelpad=10)
+        axes[1].set_ylabel('Injuries per 1000 Plays', labelpad=10)
+        ax_plays.set_ylabel('Number of Plays', color='#FF4B4B', labelpad=10)
         ax_plays.tick_params(axis='y', labelcolor='#FF4B4B')
         
         # Set ticks and labels for downs
         ordinal_suffixes = ['st', 'nd', 'rd', 'th']
-        axes[0, 1].set_xticks(range(len(down_data)))
-        axes[0, 1].set_xticklabels([
+        axes[1].set_xticks(range(len(down_data)))
+        axes[1].set_xticklabels([
             f'{int(d)}{ordinal_suffixes[min(int(d)-1, 3)]}' 
             for d in down_data['value']
         ])
         
         # Plot score differential data
         score_data = data[data['situation'] == 'score_differential'].copy()
-        sns.barplot(data=score_data, x='value', y='injury_rate', ax=axes[1, 0])
-        axes[1, 0].set_title('Injury Rate by Score Differential', pad=20)
-        axes[1, 0].set_xlabel('Point Differential')
-        axes[1, 0].set_ylabel('Injuries per 1000 Plays')
+        sns.barplot(data=score_data, x='value', y='injury_rate', ax=axes[2])
+        axes[2].set_title('Injury Rate by Score Differential', pad=15)
+        axes[2].set_xlabel('Point Differential', labelpad=10)
+        axes[2].set_ylabel('Injuries per 1000 Plays', labelpad=10)
         # Rotate and align the tick labels so they look better
-        plt.setp(axes[1, 0].xaxis.get_majorticklabels(), rotation=45, ha='right')
+        plt.setp(axes[2].xaxis.get_majorticklabels(), rotation=45, ha='right')
         
         # Plot time remaining data
         time_data = data[data['situation'] == 'time_remaining'].copy()
-        sns.barplot(data=time_data, x='value', y='injury_rate', ax=axes[1, 1])
-        axes[1, 1].set_title('Injury Rate by Time Remaining', pad=20)
-        axes[1, 1].set_xlabel('Time Remaining (minutes)')
-        axes[1, 1].set_ylabel('Injuries per 1000 Plays')
+        sns.barplot(data=time_data, x='value', y='injury_rate', ax=axes[3])
+        axes[3].set_title('Injury Rate by Time Remaining', pad=15)
+        axes[3].set_xlabel('Time Remaining (minutes)', labelpad=10)
+        axes[3].set_ylabel('Injuries per 1000 Plays', labelpad=10)
         
         # Add gridlines and set consistent y-axis limits for all subplots
         max_rate = data['injury_rate'].max()
@@ -303,39 +321,20 @@ class NFLPlotter:
         y_padding = (max_rate - min_rate) * 0.1
         
         # Format all subplots
-        for ax in [axes[0, 0], axes[1, 0], axes[1, 1]]:
+        for ax in [axes[0], axes[2], axes[3]]:
             ax.grid(True, alpha=0.3)
             ax.set_ylim(min_rate - y_padding, max_rate + y_padding)
             ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:.1f}'))
             ax.margins(x=0.1)
         
         # Special handling for down plot with dual axis
-        axes[0, 1].grid(True, alpha=0.3)
-        axes[0, 1].set_ylim(min_rate - y_padding, max_rate + y_padding)
-        axes[0, 1].yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:.1f}'))
-        axes[0, 1].margins(x=0.1)
+        axes[1].grid(True, alpha=0.3)
+        axes[1].set_ylim(min_rate - y_padding, max_rate + y_padding)
+        axes[1].yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:.1f}'))
+        axes[1].margins(x=0.1)
         
-        # Format play count axis to use comma separator
-        ax_plays.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{int(x):,}'))
-        
-        # Add legend for down plot
-        axes[0, 1].legend(['Injury Rate'], loc='upper left', frameon=True, framealpha=0.9)
-        ax_plays.legend(['Play Count'], loc='upper right', frameon=True, framealpha=0.9)
-        
-        # First adjust the spacing between subplots
-        plt.subplots_adjust(
-            top=0.93,      # Move plots down from top
-            bottom=0.18,   # Increase space at bottom
-            hspace=0.45,   # Increase vertical space between plots
-            wspace=0.25    # Space between columns
-        )
-        
-        # Then adjust the overall layout
-        plt.tight_layout(rect=[0, 0.05, 1, 0.93])
-        
-        # Move x-axis labels down for bottom plots
-        for ax in [axes[1, 0], axes[1, 1]]:
-            ax.tick_params(axis='x', pad=15)  # Add padding between axis and labels
+        # Adjust bottom margin for x-labels
+        plt.subplots_adjust(bottom=0.15)
         
         return fig
     
