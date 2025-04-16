@@ -49,7 +49,7 @@ nfl_injury_analysis/
   - `injury_by_game_situation.png`:
     - Top left plot (Injury Rate by Quarter) requires validation of data accuracy
     - Bottom right plot (Injury Rate by Time Remaining) needs data verification
-    - X-axis readability improvements implemented for score differential and time remaining plots
+    - X-axis readability improvements needed for score differential and time remaining plots
   - `injury_trend_over_time.png`:
     - Plot requires improvements in data representation and visual clarity
     - Time scale adjustments needed for better interpretation
