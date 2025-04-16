@@ -44,6 +44,16 @@ nfl_injury_analysis/
   - Dual-axis plots showing injury rates and play counts
   - Customizable plot styling and formatting
 
+### Known Issues and Planned Improvements
+- **Visualization Accuracy**
+  - `injury_by_game_situation.png`:
+    - Top left plot (Injury Rate by Quarter) requires validation of data accuracy
+    - Bottom right plot (Injury Rate by Time Remaining) needs data verification
+    - X-axis readability improvements implemented for score differential and time remaining plots
+  - `injury_trend_over_time.png`:
+    - Plot requires improvements in data representation and visual clarity
+    - Time scale adjustments needed for better interpretation
+
 ### In Development
 - Advanced Quality Assurance:
   - [ ] Comprehensive unit test suite
