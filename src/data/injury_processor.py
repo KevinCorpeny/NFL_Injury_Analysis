@@ -12,17 +12,19 @@ class InjuryProcessor(BaseProcessor):
     This class is responsible for loading, processing, and validating NFL injury data.
     """
     
-    def __init__(self, config: Config):
+    def __init__(self, config: dict):
         """Initialize the injury processor.
         
         Args:
-            config: Configuration object with processing parameters
+            config: Configuration dictionary with processing parameters
         """
         super().__init__(config)
-        self.injury_features = config.model.features
-        self.injury_data_path = Path(config.data.injury_data_path)
-        self.processed_injury_path = Path(config.data.processed_data_path)
+        self.injury_features = config.get('features', {}).get('injury_features', [])
+        self.injury_data_path = Path(config.get('data', {}).get('injury_data_path', ''))
+        self.processed_injury_path = Path(config.get('data', {}).get('processed_data_path', ''))
         self.injury_data = None
+        self.plays_data = None
+        self.config = config
     
     def load_data(self) -> pd.DataFrame:
         """Load the injury data from CSV file.
@@ -36,10 +38,31 @@ class InjuryProcessor(BaseProcessor):
             raise FileNotFoundError(f"Injury data file not found at {self.injury_data_path}")
         
         self.injury_data = pd.read_csv(self.injury_data_path)
+        
+        # Convert week and season to integers
+        self.injury_data['week'] = self.injury_data['week'].astype(int)
+        self.injury_data['season'] = self.injury_data['season'].astype(int)
+        
+        # Rename columns to match expected names
+        column_mapping = {
+            'full_name': 'player_name',
+            'report_primary_injury': 'injury_type',
+            'report_status': 'game_status'
+        }
+        self.injury_data = self.injury_data.rename(columns=column_mapping)
+        
         logger.info(f"Loaded {len(self.injury_data)} injury records")
         
-        # Log the columns available
-        logger.info(f"Columns in the injury data: {self.injury_data.columns.tolist()}")
+        # Load plays data for game situation information
+        plays_path = Path(self.config.get('data', {}).get('processed_data_path', '')) / "processed_plays.parquet"
+        if plays_path.exists():
+            self.plays_data = pd.read_parquet(plays_path)
+            # Convert week and season to integers in plays data
+            self.plays_data['week'] = self.plays_data['week'].astype(int)
+            self.plays_data['season'] = self.plays_data['season'].astype(int)
+            logger.info(f"Loaded {len(self.plays_data)} plays")
+        else:
+            logger.error(f"Plays data not found at {plays_path}")
         
         return self.injury_data
     
@@ -52,6 +75,7 @@ class InjuryProcessor(BaseProcessor):
         3. Handle missing values
         4. Add derived features
         5. Validate the processed data
+        6. Merge with plays data to get game situation information
         
         Returns:
             Processed injury data as a DataFrame
@@ -74,8 +98,50 @@ class InjuryProcessor(BaseProcessor):
         # Validate the processed data
         self._validate_data()
         
-        # Select relevant columns
+        # Merge with plays data to get game situation information
+        if self.plays_data is not None:
+            # Create game identifiers
+            self.injury_data['game_id'] = self.injury_data['season'].astype(str) + '_' + self.injury_data['week'].astype(str)
+            self.plays_data['game_id'] = self.plays_data['season'].astype(str) + '_' + self.plays_data['week'].astype(str)
+            
+            # Get the most common game situation for each game
+            game_situations = self.plays_data.groupby('game_id').agg({
+                'quarter': lambda x: x.mode()[0] if not x.mode().empty else None,
+                'down': lambda x: x.mode()[0] if not x.mode().empty else None,
+                'score_differential': lambda x: x.mode()[0] if not x.mode().empty else None,
+                'game_seconds_remaining': lambda x: x.mode()[0] if not x.mode().empty else None
+            }).reset_index()
+            
+            # Merge game situations with injury data
+            self.injury_data = pd.merge(
+                self.injury_data,
+                game_situations,
+                on='game_id',
+                how='left'
+            )
+            
+            # Create time remaining bins
+            self.injury_data['time_remaining_bin'] = pd.cut(
+                self.injury_data['game_seconds_remaining'],
+                bins=[0, 900, 1800, 2700, 3600],
+                labels=['0-15 min', '15-30 min', '30-45 min', '45-60 min']
+            )
+            
+            # Create score differential bins
+            self.injury_data['score_differential_bin'] = pd.cut(
+                self.injury_data['score_differential'],
+                bins=[-100, -21, -14, -7, 0, 7, 14, 21, 100],
+                labels=['< -21', '-21 to -14', '-14 to -7', '-7 to 0', '0 to 7', '7 to 14', '14 to 21', '> 21']
+            )
+        
+        # Store a copy of all columns before feature selection
+        all_columns = self.injury_data.copy()
+        
+        # Select features if specified
         self._select_features()
+        
+        # Restore all columns
+        self.injury_data = all_columns
         
         logger.info("Injury data processing completed")
         return self.injury_data
@@ -175,42 +241,33 @@ class InjuryProcessor(BaseProcessor):
             # Initialize games played counter
             games_played = 0
             
-            # Create a list to track games played for each week
-            games_played_by_week = []
+            # Get the first week as an integer
+            first_week = int(group['week'].iloc[0])
             
-            # Iterate through weeks to calculate cumulative games played
-            for week in range(1, 18):  # NFL regular season is 17 weeks
-                if week < group['week'].min():
-                    # Before first injury, count as games played
-                    games_played += 1
-                elif week == group['week'].min():
-                    # At injury week, don't count as played
-                    pass
-                else:
-                    # After injury, check if player was active
-                    week_data = group[group['week'] == week]
-                    if not week_data.empty:
-                        status = week_data['game_status'].iloc[0]
-                        practice_status = week_data['practice_status'].iloc[0]
-                        
-                        # Don't count if player was inactive for non-game reasons
-                        if status in non_game_absences or practice_status in non_game_absences:
-                            pass
-                        else:
-                            games_played += 1
-                
-                games_played_by_week.append(games_played)
+            # Calculate games played before injury
+            games_played = first_week - 1  # All weeks before injury count as played
             
-            # Add the games played count to the injury record
-            group['games_played_before_injury'] = games_played_by_week[group['week'].iloc[0] - 1]
+            # Calculate remaining games after injury
+            remaining_games = 0
+            for week in range(first_week + 1, 18):  # NFL regular season is 17 weeks
+                # Check if player was active in this week
+                week_data = group[group['week'] == week]
+                if not week_data.empty:
+                    status = week_data['game_status'].iloc[0]
+                    practice_status = week_data['practice_status'].iloc[0]
+                    
+                    # Count game if player was not inactive for non-game reasons
+                    if status not in non_game_absences and practice_status not in non_game_absences:
+                        remaining_games += 1
             
-            # Add additional tracking metrics
-            group['total_season_games'] = games_played_by_week[-1]  # Total games played in season
-            group['games_after_injury'] = group['total_season_games'] - group['games_played_before_injury']
+            # Add the stats to the group
+            group['games_played_before_injury'] = games_played
+            group['total_season_games'] = games_played + remaining_games
+            group['games_after_injury'] = remaining_games
             
             # Calculate injury timing metrics
             group['injury_week_percentage'] = group['week'] / 17  # Percentage through season
-            group['games_played_percentage'] = group['games_played_before_injury'] / group['total_season_games']
+            group['games_played_percentage'] = games_played / (games_played + remaining_games) if (games_played + remaining_games) > 0 else 0
             
             return group
 
@@ -275,7 +332,9 @@ class InjuryProcessor(BaseProcessor):
         missing_columns = [col for col in required_columns if col not in self.injury_data.columns]
         
         if missing_columns:
-            logger.warning(f"Missing required columns in injury data: {missing_columns}")
+            error_msg = f"Missing required columns in injury data: {missing_columns}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         # Check for duplicate records
         duplicate_count = self.injury_data.duplicated().sum()
@@ -374,7 +433,7 @@ class InjuryProcessor(BaseProcessor):
         return merged_data
     
     def save_processed_data(self, output_path: Optional[Union[str, Path]] = None) -> None:
-        """Save the processed injury data to CSV.
+        """Save the processed injury data to Parquet.
         
         Args:
             output_path: Path to save the processed data. If None, use the default path.
@@ -385,10 +444,11 @@ class InjuryProcessor(BaseProcessor):
         if output_path is None:
             output_dir = Path("data/processed")
             output_dir.mkdir(parents=True, exist_ok=True)
-            output_path = output_dir / "processed_injuries.csv"
+            output_path = output_dir / "processed_injuries.parquet"
         else:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        self.injury_data.to_csv(output_path, index=False)
+        # Don't select features when saving - keep all columns including game situations
+        self.injury_data.to_parquet(output_path, index=False)
         logger.info(f"Saved processed injury data to {output_path}") 
