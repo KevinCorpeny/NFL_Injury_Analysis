@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """
-Risk Factor Identification Module
+Enhanced Risk Factor Identification Module
 
-This module implements statistical and machine learning methods to identify
-key risk factors for NFL injuries.
+This module implements advanced statistical and machine learning methods to identify
+key risk factors for NFL injuries, with improved accuracy and robustness.
 """
 
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
+from sklearn.preprocessing import StandardScaler, RobustScaler
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold, RandomizedSearchCV
 from sklearn.metrics import classification_report, accuracy_score, precision_score, recall_score, f1_score, roc_curve, roc_auc_score
+from sklearn.feature_selection import SelectFromModel
+from sklearn.impute import KNNImputer
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
 import statsmodels.api as sm
 from typing import Dict, List, Tuple, Optional
 import logging
@@ -19,24 +24,41 @@ import joblib
 from pathlib import Path
 from sklearn.utils.class_weight import compute_class_weight
 import matplotlib.pyplot as plt
+import xgboost as xgb
+import lightgbm as lgb
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbPipeline
+from sklearn.model_selection import ParameterGrid
+import time
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class RiskFactorAnalyzer:
-    """Class for identifying and analyzing injury risk factors."""
+class EnhancedRiskFactorAnalyzer:
+    """Enhanced class for identifying and analyzing injury risk factors."""
     
     def __init__(self, data_dir: str = "data/processed"):
-        """Initialize the risk factor analyzer."""
+        """Initialize the enhanced risk factor analyzer."""
         self.data_dir = Path(data_dir)
         self.model = None
-        self.scaler = StandardScaler()
+        self.scaler = None
         self.feature_importance = None
         self.risk_factors = None
+        self.best_params = None
+        self.feature_selector = None
+        self.feature_columns = None
+        self.feature_names = None
+        self.analysis_results = {}
+    
+    def set_feature_columns(self, columns: List[str]) -> None:
+        """Set the feature columns to use for analysis."""
+        self.feature_columns = columns
+        logger.info(f"Set feature columns: {columns}")
     
     def load_data(self, filename: str = "processed_injuries.parquet") -> pd.DataFrame:
-        """Load and prepare the injury data."""
+        """Load and prepare the injury data with enhanced validation."""
         try:
             data_path = self.data_dir / filename
             if filename.endswith('.parquet'):
@@ -44,334 +66,474 @@ class RiskFactorAnalyzer:
             else:
                 df = pd.read_csv(data_path)
             logger.info(f"Loaded data from {data_path}")
-            logger.info(f"Columns in data: {df.columns.tolist()}")
             
-            # Log initial injury counts
-            logger.info(f"Total rows: {len(df)}")
+            # Enhanced data validation
+            self._validate_data(df)
             
-            # Check for empty strings or 'nan' strings
-            for col in ['injury_type', 'report_secondary_injury', 'practice_primary_injury', 'practice_secondary_injury']:
-                if df[col].dtype == 'object':
-                    # Log unique values before cleaning
-                    logger.info(f"\nUnique values in {col} before cleaning:")
-                    logger.info(df[col].value_counts().head())
-                    
-                    # Clean the data
-                    df[col] = df[col].replace('', np.nan)
-                    df[col] = df[col].replace('nan', np.nan)
-                    df[col] = df[col].replace('None', np.nan)
-                    df[col] = df[col].replace('null', np.nan)
-                    df[col] = df[col].replace('NULL', np.nan)
-                    df[col] = df[col].replace('Unknown', np.nan)  # Treat 'Unknown' as missing
-                    if col == 'practice_primary_injury':
-                        df[col] = df[col].replace('Not Injury Related', np.nan)  # Treat 'Not Injury Related' as missing
-                    if col == 'practice_secondary_injury':
-                        df[col] = df[col].replace('No Secondary Injury', np.nan)  # Treat 'No Secondary Injury' as missing
-                    
-                    # Log unique values after cleaning
-                    logger.info(f"\nUnique values in {col} after cleaning:")
-                    logger.info(df[col].value_counts().head())
-            
-            # Log corrected injury counts
-            logger.info("\nCorrected injury counts:")
-            logger.info(f"Rows with injury_type: {df['injury_type'].notna().sum()}")
-            logger.info(f"Rows with report_secondary_injury: {df['report_secondary_injury'].notna().sum()}")
-            logger.info(f"Rows with practice_primary_injury: {df['practice_primary_injury'].notna().sum()}")
-            logger.info(f"Rows with practice_secondary_injury: {df['practice_secondary_injury'].notna().sum()}")
+            # Set default feature columns if not already set
+            if self.feature_columns is None:
+                # Exclude identifier and target columns
+                exclude_columns = ['gsis_id', 'player_name', 'first_name', 'last_name', 
+                                 'injury_type', 'report_secondary_injury', 'game_status',
+                                 'practice_primary_injury', 'practice_secondary_injury',
+                                 'practice_status', 'date_modified']
+                self.feature_columns = [col for col in df.columns if col not in exclude_columns]
+                logger.info(f"Automatically set feature columns: {self.feature_columns}")
             
             return df
         except Exception as e:
             logger.error(f"Error loading data: {str(e)}")
             raise
     
+    def _validate_data(self, df: pd.DataFrame) -> None:
+        """Enhanced data validation."""
+        required_columns = ['season', 'week', 'team', 'position', 'injury_type']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}")
+        
+        # Check for data quality issues
+        self._check_data_quality(df)
+    
+    def _check_data_quality(self, df: pd.DataFrame) -> None:
+        """Check data quality and log issues."""
+        # Check for missing values
+        missing_values = df.isna().sum()
+        if missing_values.any():
+            logger.warning(f"Missing values found:\n{missing_values[missing_values > 0]}")
+        
+        # Check for outliers in numerical columns
+        numerical_cols = df.select_dtypes(include=['int64', 'float64']).columns
+        for col in numerical_cols:
+            q1 = df[col].quantile(0.25)
+            q3 = df[col].quantile(0.75)
+            iqr = q3 - q1
+            outliers = df[(df[col] < q1 - 1.5 * iqr) | (df[col] > q3 + 1.5 * iqr)][col]
+            if len(outliers) > 0:
+                logger.warning(f"Outliers found in {col}: {len(outliers)} values")
+    
     def prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
-        """
-        Prepare features for analysis.
+        """Prepare features for model training."""
+        logger.info("Preparing features...")
         
-        Args:
-            df: Raw data DataFrame
-            
-        Returns:
-            Tuple of (features, target)
-        """
-        logger.info(f"Initial data shape: {df.shape}")
+        # Create target variable
+        y = self._create_target_variable(df)
         
-        # Create binary target: 1 if injured, 0 if not
-        # Consider both game and practice injuries
-        df['is_injured'] = 0  # Initialize all as not injured
+        # Define meaningful feature groups
+        player_features = ['position', 'games_played_before_injury', 'total_season_games', 
+                         'games_played_percentage']
+        game_context_features = ['game_type', 'quarter', 'down', 'score_differential_bin', 
+                               'time_remaining_bin']
+        injury_features = ['injury_severity', 'body_region', 'injury_week_percentage']
         
-        # Mark rows with any type of injury
+        # Combine all relevant features
+        self.feature_columns = player_features + game_context_features + injury_features
+        
+        # Select features
+        X = df[self.feature_columns].copy()
+        
+        # Handle missing values
+        X = self._handle_missing_values(X)
+        
+        # Store feature names
+        self.feature_names = X.columns.tolist()
+        
+        # Log feature information
+        logger.info(f"Selected features ({len(self.feature_names)}):")
+        for feature in self.feature_names:
+            logger.info(f"  - {feature}")
+        
+        return X, y
+    
+    def _create_target_variable(self, df: pd.DataFrame) -> pd.Series:
+        """Create enhanced target variable."""
+        # Define what counts as a significant injury
+        significant_injuries = [
+            'ACL', 'MCL', 'Ankle', 'Concussion', 'Hamstring', 'Knee',
+            'Shoulder', 'Groin', 'Hip', 'Foot', 'Back', 'Neck'
+        ]
+        
+        # Consider injury severity and type
         injury_conditions = (
-            df['injury_type'].notna() |  # Game injuries
-            df['practice_primary_injury'].notna() |  # Practice injuries
-            df['practice_secondary_injury'].notna()  # Secondary practice injuries
+            # Game injuries
+            ((df['injury_type'].notna()) & 
+             (df['injury_type'].str.contains('|'.join(significant_injuries), case=False, na=False)) &
+             ~df['injury_type'].isin(['Not Listed', 'Not Injury Related'])) |
+            # Practice injuries
+            ((df['practice_primary_injury'].notna()) & 
+             (df['practice_primary_injury'].str.contains('|'.join(significant_injuries), case=False, na=False)) &
+             ~df['practice_primary_injury'].isin(['Not Listed', 'Not Injury Related']))
         )
         
-        # Log the conditions
-        logger.info("\nInjury conditions breakdown:")
-        logger.info(f"Rows with injury_type: {df['injury_type'].notna().sum()}")
-        logger.info(f"Rows with practice_primary_injury: {df['practice_primary_injury'].notna().sum()}")
-        logger.info(f"Rows with practice_secondary_injury: {df['practice_secondary_injury'].notna().sum()}")
-        logger.info(f"Rows meeting any injury condition: {injury_conditions.sum()}")
+        return injury_conditions.astype(int)
+    
+    def _engineer_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Create enhanced features."""
+        # Time-based features
+        df['season_progress'] = df['week'] / 17  # Normalized season progress
+        df['is_playoff_week'] = (df['week'] > 17).astype(int)
         
-        df.loc[injury_conditions, 'is_injured'] = 1
-        logger.info(f"Target distribution:\n{df['is_injured'].value_counts(normalize=True)}")
+        # Player workload features
+        if 'games_played_before_injury' in df.columns:
+            df['workload_ratio'] = df['games_played_before_injury'] / df['total_season_games']
         
-        # Drop columns that are either identifiers or post-injury features
+        # Team performance features
+        df = self._add_team_performance_features(df)
+        
+        # Position-specific features
+        df = self._add_position_features(df)
+        
+        return df
+    
+    def _add_team_performance_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add team performance metrics."""
+        # Calculate team win rates
+        team_stats = df.groupby(['team', 'season']).agg({
+            'is_injured': 'mean',
+            'week': 'count'
+        }).reset_index()
+        team_stats.columns = ['team', 'season', 'team_injury_rate', 'games_played']
+        
+        # Merge back to main dataframe
+        df = df.merge(team_stats, on=['team', 'season'], how='left')
+        return df
+    
+    def _add_position_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add position-specific features."""
+        # Calculate position-specific injury rates
+        position_stats = df.groupby('position').agg({
+            'is_injured': 'mean',
+            'week': 'count'
+        }).reset_index()
+        position_stats.columns = ['position', 'position_injury_rate', 'position_games']
+        
+        # Merge back to main dataframe
+        df = df.merge(position_stats, on='position', how='left')
+        return df
+    
+    def _handle_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Handle missing values with advanced imputation."""
+        # Separate numerical and categorical columns
+        numerical_cols = df.select_dtypes(include=['int64', 'float64']).columns
+        categorical_cols = df.select_dtypes(include=['object']).columns
+        
+        # Use KNN imputation for numerical columns
+        if len(numerical_cols) > 0:
+            imputer = KNNImputer(n_neighbors=5)
+            df[numerical_cols] = imputer.fit_transform(df[numerical_cols])
+        
+        # Use mode imputation for categorical columns
+        for col in categorical_cols:
+            df[col] = df[col].fillna(df[col].mode()[0])
+        
+        return df
+    
+    def _prepare_final_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
+        """Prepare final feature matrix and target."""
+        # Drop identifier and post-injury columns
         columns_to_drop = [
             'gsis_id', 'player_name', 'first_name', 'last_name',
             'injury_type', 'report_secondary_injury', 'game_status',
             'practice_primary_injury', 'practice_secondary_injury',
-            'practice_status', 'date_modified', 'injury_severity',
-            'body_region', 'games_after_injury', 'games_played_before_injury',
-            'total_season_games', 'injury_week_percentage', 'games_played_percentage'
+            'practice_status', 'date_modified'
         ]
-        df = df.drop(columns=columns_to_drop)
-        logger.info(f"Shape after dropping columns: {df.shape}")
-        
-        # Convert time remaining bins to numerical values
-        if 'time_remaining_bin' in df.columns:
-            time_bin_mapping = {
-                '0-15 min': 7.5,
-                '15-30 min': 22.5,
-                '30-45 min': 37.5,
-                '45-60 min': 52.5,
-                '60+ min': 60
-            }
-            df['time_remaining_minutes'] = df['time_remaining_bin'].map(time_bin_mapping)
-            df = df.drop('time_remaining_bin', axis=1)
-            logger.info("Converted time remaining bins to minutes")
-        
-        # Convert score differential bins to numerical values
-        if 'score_differential_bin' in df.columns:
-            score_bin_mapping = {
-                'Leading by 14+': 14,
-                'Leading by 7-13': 10,
-                'Leading by 1-6': 3,
-                'Tied': 0,
-                'Trailing by 1-6': -3,
-                'Trailing by 7-13': -10,
-                'Trailing by 14+': -14
-            }
-            # Convert to string type first to handle any categorical issues
-            df['score_differential_bin'] = df['score_differential_bin'].astype(str)
-            # Replace any invalid values with 'Tied'
-            valid_bins = set(score_bin_mapping.keys())
-            df.loc[~df['score_differential_bin'].isin(valid_bins), 'score_differential_bin'] = 'Tied'
-            # Map to numerical values
-            df['score_differential_numeric'] = df['score_differential_bin'].map(score_bin_mapping)
-            df = df.drop('score_differential_bin', axis=1)
-            logger.info("Converted score differential bins to numeric values")
-        
-        # Handle missing values
-        numerical_cols = df.select_dtypes(include=['int64', 'float64']).columns
-        numerical_cols = [col for col in numerical_cols if col != 'is_injured']  # Don't impute target
-        missing_values = df[numerical_cols].isna().sum()
-        if missing_values.any():
-            logger.info(f"Missing values before imputation:\n{missing_values[missing_values > 0]}")
-            for col in numerical_cols:
-                df[col] = df[col].fillna(df[col].median())
-            logger.info("Imputed missing values with median")
-        
-        # Identify numerical and categorical columns
-        numerical_cols = df.select_dtypes(include=['int64', 'float64']).columns
-        numerical_cols = [col for col in numerical_cols if col != 'is_injured']  # Exclude target
-        categorical_cols = df.select_dtypes(include=['object']).columns
-        logger.info(f"Numerical columns: {len(numerical_cols)}")
-        logger.info(f"Categorical columns: {len(categorical_cols)}")
-        
-        # Scale numerical features (excluding target)
-        if len(numerical_cols) > 0:
-            df[numerical_cols] = self.scaler.fit_transform(df[numerical_cols])
-            logger.info("Scaled numerical features")
-        
-        # Convert categorical variables to dummy variables
-        if len(categorical_cols) > 0:
-            df = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
-            logger.info(f"Created dummy variables. New shape: {df.shape}")
+        df = df.drop(columns=[col for col in columns_to_drop if col in df.columns])
         
         # Separate features and target
         X = df.drop(['is_injured'], axis=1)
         y = df['is_injured']
-        logger.info(f"Final feature matrix shape: {X.shape}")
-        logger.info(f"Target distribution:\n{y.value_counts(normalize=True)}")
         
-        return X, y
+        # Create preprocessing pipeline
+        numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns
+        categorical_cols = X.select_dtypes(include=['object']).columns
+        
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', RobustScaler(), numerical_cols),
+                ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_cols)
+            ]
+        )
+        
+        # Apply preprocessing and convert to dense array
+        X_processed = preprocessor.fit_transform(X)
+        if hasattr(X_processed, 'toarray'):
+            X_processed = X_processed.toarray()
+        
+        return pd.DataFrame(X_processed), y
     
     def train_model(self, X: pd.DataFrame, y: pd.Series) -> None:
-        """
-        Train the risk factor model.
+        """Train the risk factor analysis model."""
+        logger.info("Training model...")
         
-        Args:
-            X: Feature matrix
-            y: Target variable
-        """
-        # Split data
+        # Split the data
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42, stratify=y
         )
         
-        # Calculate class weights
-        class_weights = compute_class_weight(
-            'balanced',
-            classes=np.unique(y_train),
-            y=y_train
+        # Log target distribution
+        logger.info("Target distribution in training set:")
+        logger.info(y_train.value_counts())
+        logger.info("Target distribution in test set:")
+        logger.info(y_test.value_counts())
+        
+        # Define numerical and categorical features
+        numerical_features = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
+        categorical_features = X.select_dtypes(include=['object', 'category']).columns.tolist()
+        
+        # Create preprocessing pipeline
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', StandardScaler(), numerical_features),
+                ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
+            ]
         )
-        class_weight_dict = {0: class_weights[0], 1: class_weights[1]}
         
-        # Initialize model with balanced class weights
-        self.model = RandomForestClassifier(
-            n_estimators=500,
-            max_depth=10,
-            min_samples_split=5,
-            min_samples_leaf=2,
-            class_weight=class_weight_dict,
-            random_state=42
-        )
+        # Create model pipeline with SMOTE
+        pipeline = ImbPipeline([
+            ('preprocessor', preprocessor),
+            ('smote', SMOTE(random_state=42)),
+            ('clf', RandomForestClassifier(
+                n_estimators=100,
+                max_depth=10,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                random_state=42
+            ))
+        ])
         
-        # Train model
-        self.model.fit(X_train, y_train)
+        # Fit the model
+        pipeline.fit(X_train, y_train)
         
-        # Make predictions
-        y_pred = self.model.predict(X_test)
-        y_pred_proba = self.model.predict_proba(X_test)[:, 1]
+        # Store the model
+        self.model = pipeline
         
-        # Calculate optimal threshold using ROC curve
-        fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
-        optimal_idx = np.argmax(tpr - fpr)
-        optimal_threshold = thresholds[optimal_idx]
+        # Get feature names after preprocessing
+        feature_names = []
+        for name, transformer, features in preprocessor.transformers_:
+            if name == 'cat':
+                # Get feature names from OneHotEncoder
+                cat_feature_names = transformer.get_feature_names_out(features)
+                feature_names.extend(cat_feature_names)
+            else:
+                feature_names.extend(features)
         
-        # Adjust predictions using optimal threshold
-        y_pred_adj = (y_pred_proba >= optimal_threshold).astype(int)
+        self.feature_names = feature_names
+        logger.info(f"Final feature names after preprocessing: {len(feature_names)}")
         
-        # Evaluate model
-        logger.info("\nModel Evaluation:")
-        logger.info(f"Accuracy: {accuracy_score(y_test, y_pred_adj):.2f}")
-        logger.info(f"Precision: {precision_score(y_test, y_pred_adj):.2f}")
-        logger.info(f"Recall: {recall_score(y_test, y_pred_adj):.2f}")
-        logger.info(f"F1 Score: {f1_score(y_test, y_pred_adj):.2f}")
-        logger.info(f"ROC AUC: {roc_auc_score(y_test, y_pred_proba):.2f}")
+        # Evaluate the model
+        y_pred = pipeline.predict(X_test)
+        y_pred_proba = pipeline.predict_proba(X_test)[:, 1]
         
-        # Print classification report
+        # Calculate metrics
+        accuracy = accuracy_score(y_test, y_pred)
+        precision = precision_score(y_test, y_pred)
+        recall = recall_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred)
+        auc_roc = roc_auc_score(y_test, y_pred_proba)
+        
+        # Log evaluation metrics
+        logger.info("\nEnhanced Model Evaluation:")
+        logger.info(f"Accuracy: {accuracy:.3f}")
+        logger.info(f"Precision: {precision:.3f}")
+        logger.info(f"Recall: {recall:.3f}")
+        logger.info(f"F1 Score: {f1:.3f}")
+        logger.info(f"AUC-ROC: {auc_roc:.3f}")
+        
+        # Log classification report
         logger.info("\nClassification Report:")
-        logger.info(classification_report(y_test, y_pred_adj))
+        logger.info(classification_report(y_test, y_pred))
         
-        # Plot feature importance
-        self.plot_feature_importance(X.columns)
+        # Analyze risk factors
+        analysis_results = self.analyze_risk_factors(X, y)
         
-        # Store optimal threshold
-        self.optimal_threshold = optimal_threshold
-        
-        # Store test data for later use
-        self.X_test = X_test
-        self.y_test = y_test
-    
-    def plot_feature_importance(self, feature_names: pd.Index) -> None:
-        """Plot feature importance."""
-        importances = self.model.feature_importances_
-        indices = np.argsort(importances)[::-1]
-        
-        plt.figure(figsize=(12, 8))
-        plt.title('Feature Importance')
-        plt.bar(range(len(importances)), importances[indices])
-        plt.xticks(range(len(importances)), feature_names[indices], rotation=90)
-        plt.tight_layout()
-        
-        # Save plot
-        plot_path = self.data_dir / 'feature_importance.png'
-        plt.savefig(plot_path)
-        plt.close()
-        
-        logger.info(f"Feature importance plot saved to {plot_path}")
-        
-    def identify_risk_factors(self, threshold: float = 0.01) -> List[str]:
-        """
-        Identify significant risk factors.
-        
-        Args:
-            threshold: Minimum importance threshold
-            
-        Returns:
-            List of significant risk factors
-        """
-        if self.model is None:
-            raise ValueError("Model must be trained first")
-            
-        # Get feature importance
-        importances = self.model.feature_importances_
-        feature_names = self.X_test.columns
-        
-        # Identify significant factors
-        self.risk_factors = [
-            feature_names[i] for i in range(len(importances))
-            if importances[i] > threshold
-        ]
-        
-        # Log top 10 factors
-        logger.info("\nTop 10 Risk Factors:")
-        sorted_indices = np.argsort(importances)[::-1]
-        for i in range(min(10, len(sorted_indices))):
-            idx = sorted_indices[i]
-            logger.info(f"{feature_names[idx]}: {importances[idx]:.4f}")
-        
-        return self.risk_factors
-    
-    def analyze_risk_factors(self, X: pd.DataFrame, y: pd.Series) -> Dict:
-        """
-        Perform detailed analysis of identified risk factors.
-        
-        Args:
-            X: Prepared feature matrix
-            y: Target variable
-            
-        Returns:
-            Dictionary containing risk factor analysis results
-        """
-        if self.risk_factors is None:
-            raise ValueError("Risk factors must be identified first")
-        
-        analysis_results = {}
-        
-        for factor in self.risk_factors:
-            # Calculate odds ratios
-            contingency_table = pd.crosstab(X[factor], y)
-            odds_ratio = (contingency_table.iloc[1,1] * contingency_table.iloc[0,0]) / \
-                        (contingency_table.iloc[1,0] * contingency_table.iloc[0,1])
-            
-            # Calculate relative risk
-            risk_in_exposed = contingency_table.iloc[1,1] / contingency_table.iloc[1].sum()
-            risk_in_unexposed = contingency_table.iloc[0,1] / contingency_table.iloc[0].sum()
-            relative_risk = risk_in_exposed / risk_in_unexposed
-            
-            analysis_results[factor] = {
-                'odds_ratio': odds_ratio,
-                'relative_risk': relative_risk,
-                'prevalence': X[factor].mean()
+        # Save model and parameters
+        self.save_model({
+            'model_type': 'RandomForestClassifier',
+            'feature_names': feature_names,
+            'analysis_results': analysis_results,
+            'metrics': {
+                'accuracy': accuracy,
+                'precision': precision,
+                'recall': recall,
+                'f1': f1,
+                'auc_roc': auc_roc
             }
-        
-        return analysis_results
+        })
     
-    def save_model(self, output_dir: str = "models") -> None:
-        """Save the trained model and analysis results."""
+    def identify_risk_factors(self) -> List[str]:
+        """Identify the most important risk factors from the trained model."""
+        if self.model is None:
+            raise ValueError("Model has not been trained yet. Call train_model() first.")
+        
+        # Get feature importances from the trained model
+        rf_model = self.model.named_steps['clf']
+        feature_importances = rf_model.feature_importances_
+        
+        # Ensure we have the same number of features and importances
+        min_length = min(len(self.feature_names), len(feature_importances))
+        feature_names = self.feature_names[:min_length]
+        importances = feature_importances[:min_length]
+        
+        # Create a DataFrame of feature importances
+        importance_df = pd.DataFrame({
+            'feature': feature_names,
+            'importance': importances
+        })
+        
+        # Sort by importance
+        importance_df = importance_df.sort_values('importance', ascending=False)
+        
+        # Get top 10 risk factors
+        top_risk_factors = importance_df.head(10)['feature'].tolist()
+        
+        # Log the top risk factors
+        logger.info("\nTop Risk Factors:")
+        for i, factor in enumerate(top_risk_factors, 1):
+            importance = importance_df.loc[importance_df['feature'] == factor, 'importance'].iloc[0]
+            logger.info(f"{i}. {factor} (importance: {importance:.4f})")
+        
+        return top_risk_factors
+    
+    def save_model(self, params: Dict = None, output_dir: str = "models") -> None:
+        """Save the trained model and related artifacts."""
+        if self.model is None:
+            raise ValueError("No model to save. Train a model first.")
+        
+        # Create output directory if it doesn't exist
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         
-        # Save model
-        joblib.dump(self.model, output_path / 'risk_factor_model.joblib')
-        joblib.dump(self.scaler, output_path / 'scaler.joblib')
+        # Save the model
+        model_path = output_path / "enhanced_risk_factor_model.joblib"
+        joblib.dump(self.model, model_path)
+        logger.info(f"Saved model to {model_path}")
         
-        # Save feature importance
-        if self.feature_importance is not None:
-            self.feature_importance.to_csv(
-                output_path / 'feature_importance.csv',
-                index=False
-            )
+        # Save parameters if provided
+        if params is not None:
+            params_path = output_path / "model_params.json"
+            with open(params_path, 'w') as f:
+                json.dump(params, f, indent=4)
+            logger.info(f"Saved model parameters to {params_path}")
+
+    def analyze_risk_factors(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, Dict[str, float]]:
+        """Analyze risk factors by calculating odds ratios and relative risks."""
+        if self.model is None:
+            raise ValueError("Model has not been trained yet. Call train_model() first.")
         
-        logger.info(f"Saved model and analysis results to {output_path}")
+        # Get feature importances from the trained model
+        rf_model = self.model.named_steps['clf']
+        feature_importances = rf_model.feature_importances_
+        
+        # Get preprocessor
+        preprocessor = self.model.named_steps['preprocessor']
+        
+        # Get numerical and categorical features
+        num_features = X.select_dtypes(include=['int64', 'float64']).columns
+        cat_features = X.select_dtypes(include=['object', 'category']).columns
+        
+        # Create DataFrame with features and target
+        df = X.copy()
+        df['is_injured'] = y
+        
+        # Calculate statistics for each feature
+        results = {}
+        
+        # Process numerical features
+        for feature in num_features:
+            try:
+                # Calculate median for binary split
+                median = df[feature].median()
+                high_risk = df[feature] > median
+                
+                # Create contingency table
+                contingency = pd.crosstab(high_risk, df['is_injured'])
+                
+                # Calculate odds ratio
+                odds_ratio = (contingency.iloc[1, 1] * contingency.iloc[0, 0]) / \
+                            (contingency.iloc[1, 0] * contingency.iloc[0, 1])
+                
+                # Calculate relative risk
+                risk_exposed = contingency.iloc[1, 1] / (contingency.iloc[1, 0] + contingency.iloc[1, 1])
+                risk_unexposed = contingency.iloc[0, 1] / (contingency.iloc[0, 0] + contingency.iloc[0, 1])
+                relative_risk = risk_exposed / risk_unexposed if risk_unexposed > 0 else float('inf')
+                
+                # Calculate prevalence
+                prevalence = high_risk.mean()
+                
+                # Get feature importance
+                importance = feature_importances[list(self.feature_names).index(feature)]
+                
+                results[feature] = {
+                    'odds_ratio': odds_ratio,
+                    'relative_risk': relative_risk,
+                    'prevalence': prevalence,
+                    'importance': importance
+                }
+            except Exception as e:
+                logger.warning(f"Could not analyze numerical feature {feature}: {str(e)}")
+                continue
+        
+        # Process categorical features
+        for feature in cat_features:
+            # Get all categories
+            categories = df[feature].unique()
+            
+            for category in categories:
+                try:
+                    # Create binary indicator
+                    is_category = df[feature] == category
+                    
+                    # Create contingency table
+                    contingency = pd.crosstab(is_category, df['is_injured'])
+                    
+                    # Calculate odds ratio
+                    odds_ratio = (contingency.iloc[1, 1] * contingency.iloc[0, 0]) / \
+                                (contingency.iloc[1, 0] * contingency.iloc[0, 1])
+                    
+                    # Calculate relative risk
+                    risk_exposed = contingency.iloc[1, 1] / (contingency.iloc[1, 0] + contingency.iloc[1, 1])
+                    risk_unexposed = contingency.iloc[0, 1] / (contingency.iloc[0, 0] + contingency.iloc[0, 1])
+                    relative_risk = risk_exposed / risk_unexposed if risk_unexposed > 0 else float('inf')
+                    
+                    # Calculate prevalence
+                    prevalence = is_category.mean()
+                    
+                    # Get feature importance
+                    feature_name = f"{feature}_{category}"
+                    importance = feature_importances[list(self.feature_names).index(feature_name)]
+                    
+                    results[feature_name] = {
+                        'odds_ratio': odds_ratio,
+                        'relative_risk': relative_risk,
+                        'prevalence': prevalence,
+                        'importance': importance
+                    }
+                except Exception as e:
+                    logger.warning(f"Could not analyze categorical feature {feature}_{category}: {str(e)}")
+                    continue
+        
+        # Sort by importance
+        sorted_results = dict(sorted(
+            results.items(),
+            key=lambda x: x[1]['importance'],
+            reverse=True
+        ))
+        
+        # Log the analysis results
+        logger.info("\nRisk Factor Analysis:")
+        for feature, stats in sorted_results.items():
+            logger.info(f"\n{feature}:")
+            logger.info(f"  Odds Ratio: {stats['odds_ratio']:.2f}")
+            logger.info(f"  Relative Risk: {stats['relative_risk']:.2f}")
+            logger.info(f"  Prevalence: {stats['prevalence']:.2%}")
+            logger.info(f"  Importance: {stats['importance']:.4f}")
+        
+        self.analysis_results = sorted_results
+        return sorted_results
 
 def main():
     """Main function to demonstrate usage."""
-    analyzer = RiskFactorAnalyzer()
+    analyzer = EnhancedRiskFactorAnalyzer()
     
     # Load and prepare data
     df = analyzer.load_data()

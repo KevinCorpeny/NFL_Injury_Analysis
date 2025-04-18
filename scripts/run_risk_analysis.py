@@ -14,7 +14,7 @@ sys.path.append(str(src_path))
 # Import and reload the module to ensure we're using the latest code
 from models import risk_factors
 importlib.reload(risk_factors)
-from models.risk_factors import RiskFactorAnalyzer
+from models.risk_factors import EnhancedRiskFactorAnalyzer
 
 import logging
 
@@ -29,8 +29,8 @@ def main():
     """Run the risk factor analysis."""
     try:
         # Initialize analyzer
-        logger.debug("Initializing RiskFactorAnalyzer...")
-        analyzer = RiskFactorAnalyzer()
+        logger.debug("Initializing EnhancedRiskFactorAnalyzer...")
+        analyzer = EnhancedRiskFactorAnalyzer()
         logger.debug(f"Data directory: {analyzer.data_dir}")
         
         # Load and prepare data

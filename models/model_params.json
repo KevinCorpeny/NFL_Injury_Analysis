@@ -1,0 +1,296 @@
+{
+    "model_type": "RandomForestClassifier",
+    "feature_names": [
+        "games_played_before_injury",
+        "total_season_games",
+        "games_played_percentage",
+        "quarter",
+        "injury_week_percentage",
+        "position_C",
+        "position_CB",
+        "position_DE",
+        "position_DT",
+        "position_FB",
+        "position_G",
+        "position_K",
+        "position_LB",
+        "position_LS",
+        "position_P",
+        "position_QB",
+        "position_RB",
+        "position_S",
+        "position_T",
+        "position_TE",
+        "position_WR",
+        "game_type_CON",
+        "game_type_DIV",
+        "game_type_REG",
+        "game_type_SB",
+        "game_type_WC",
+        "score_differential_bin_-7 to 0",
+        "score_differential_bin_0 to 7",
+        "score_differential_bin_< -21",
+        "time_remaining_bin_0-15 min",
+        "time_remaining_bin_15-30 min",
+        "time_remaining_bin_30-45 min",
+        "time_remaining_bin_45-60 min",
+        "injury_severity_Mild to Moderate",
+        "injury_severity_Moderate to Severe",
+        "injury_severity_Severe",
+        "body_region_Head/Neck",
+        "body_region_Lower Body",
+        "body_region_Other",
+        "body_region_Unknown",
+        "body_region_Upper Body",
+        6
+    ],
+    "analysis_results": {
+        "body_region_Lower Body": {
+            "odds_ratio": 5.947137868183354,
+            "relative_risk": 1.5871434885767592,
+            "prevalence": 0.2976871243853579,
+            "importance": 0.2762750095720854
+        },
+        "body_region_Other": {
+            "odds_ratio": 0.0015048558751435044,
+            "relative_risk": 0.004835393380563305,
+            "prevalence": 0.05459843380076489,
+            "importance": 0.21713492994826306
+        },
+        "body_region_Unknown": {
+            "odds_ratio": 0.4461842998939504,
+            "relative_risk": 0.7613645815576909,
+            "prevalence": 0.5333818976507011,
+            "importance": 0.1110629383495563
+        },
+        "body_region_Head/Neck": {
+            "odds_ratio": 30.435453454483113,
+            "relative_risk": 1.5357026969685623,
+            "prevalence": 0.03802586049899836,
+            "importance": 0.06166867469056609
+        },
+        "total_season_games": {
+            "odds_ratio": 0.7269122272459999,
+            "relative_risk": 0.894939533090526,
+            "prevalence": 0.48701511564378075,
+            "importance": 0.05776831032523799
+        },
+        "games_played_before_injury": {
+            "odds_ratio": 1.1294569994248493,
+            "relative_risk": 1.0429117706260937,
+            "prevalence": 0.4116190129302495,
+            "importance": 0.048597217458099556
+        },
+        "games_played_percentage": {
+            "odds_ratio": 1.230520118957237,
+            "relative_risk": 1.0745952357444555,
+            "prevalence": 0.4874886177381169,
+            "importance": 0.047206624190691326
+        },
+        "body_region_Upper Body": {
+            "odds_ratio": 0.9478756634889405,
+            "relative_risk": 0.9812899756294432,
+            "prevalence": 0.07630668366417774,
+            "importance": 0.03283858000452536
+        },
+        "injury_severity_Mild to Moderate": {
+            "odds_ratio": 0.5037868533130839,
+            "relative_risk": 0.8128506451073053,
+            "prevalence": 0.7943179748679657,
+            "importance": 0.027372061267739223
+        },
+        "injury_week_percentage": {
+            "odds_ratio": 0.853220725507759,
+            "relative_risk": 0.9461936954485248,
+            "prevalence": 0.47474048442906575,
+            "importance": 0.02592566472774619
+        },
+        "injury_severity_Severe": {
+            "odds_ratio": 2.0009947609257908,
+            "relative_risk": 1.2293384223145343,
+            "prevalence": 0.1756692769987252,
+            "importance": 0.014465970014045145
+        },
+        "position_DT": {
+            "odds_ratio": 0.6413580371363481,
+            "relative_risk": 0.84051175384174,
+            "prevalence": 0.07903842651611728,
+            "importance": 0.013223812994268795
+        },
+        "position_CB": {
+            "odds_ratio": 1.2186771622385006,
+            "relative_risk": 1.0676301027600354,
+            "prevalence": 0.12260061919504645,
+            "importance": 0.005582559470806377
+        },
+        "time_remaining_bin_15-30 min": {
+            "odds_ratio": 1.0744097179617522,
+            "relative_risk": 1.0254710188407536,
+            "prevalence": 0.6723729739573848,
+            "importance": 0.005101247121201779
+        },
+        "position_WR": {
+            "odds_ratio": 1.2059912670803974,
+            "relative_risk": 1.0642201560366116,
+            "prevalence": 0.1356401384083045,
+            "importance": 0.004915869340556551
+        },
+        "position_DE": {
+            "odds_ratio": 0.8280384896637377,
+            "relative_risk": 0.9332955123616045,
+            "prevalence": 0.08009470041886724,
+            "importance": 0.004488616984305925
+        },
+        "position_S": {
+            "odds_ratio": 1.1950545448983683,
+            "relative_risk": 1.0607387280073903,
+            "prevalence": 0.08024039337097068,
+            "importance": 0.004453109010018849
+        },
+        "time_remaining_bin_45-60 min": {
+            "odds_ratio": 0.9278650617704488,
+            "relative_risk": 0.974083848040943,
+            "prevalence": 0.3187397559643052,
+            "importance": 0.004378167242848546
+        },
+        "position_QB": {
+            "odds_ratio": 0.6289655172413793,
+            "relative_risk": 0.8313479623824451,
+            "prevalence": 0.034055727554179564,
+            "importance": 0.0037932702693809534
+        },
+        "position_RB": {
+            "odds_ratio": 0.9987252809902258,
+            "relative_risk": 0.999556491773097,
+            "prevalence": 0.07903842651611728,
+            "importance": 0.0036799985342367936
+        },
+        "injury_severity_Moderate to Severe": {
+            "odds_ratio": 1.527528318701836,
+            "relative_risk": 1.137643918107882,
+            "prevalence": 0.03001274813330905,
+            "importance": 0.0035991443388614028
+        },
+        "position_TE": {
+            "odds_ratio": 1.119931491557265,
+            "relative_risk": 1.0388558810654906,
+            "prevalence": 0.06363139683117829,
+            "importance": 0.003578089982136752
+        },
+        "position_LB": {
+            "odds_ratio": 1.129348583776218,
+            "relative_risk": 1.041896394629595,
+            "prevalence": 0.12617009652158076,
+            "importance": 0.0035413759061433806
+        },
+        "position_G": {
+            "odds_ratio": 0.9330494688324172,
+            "relative_risk": 0.9757304324517512,
+            "prevalence": 0.06410489892551448,
+            "importance": 0.00307030633641029
+        },
+        "position_T": {
+            "odds_ratio": 0.9591689520364103,
+            "relative_risk": 0.9854498055850124,
+            "prevalence": 0.08544891640866874,
+            "importance": 0.00254573626364277
+        },
+        "position_C": {
+            "odds_ratio": 0.9191464121521653,
+            "relative_risk": 0.9703776944299134,
+            "prevalence": 0.03270806774722273,
+            "importance": 0.0025087772621025044
+        },
+        "game_type_REG": {
+            "odds_ratio": 0.976935180565683,
+            "relative_risk": 0.99197650357119,
+            "prevalence": 0.9606629029320707,
+            "importance": 0.0017552148934112432
+        },
+        "game_type_DIV": {
+            "odds_ratio": 1.1567568077242212,
+            "relative_risk": 1.0495021498076487,
+            "prevalence": 0.01245674740484429,
+            "importance": 0.0016663354840834017
+        },
+        "position_K": {
+            "odds_ratio": 1.6362392295995944,
+            "relative_risk": 1.1567091698521168,
+            "prevalence": 0.007393917319249681,
+            "importance": 0.0010452870746225148
+        },
+        "game_type_WC": {
+            "odds_ratio": 1.158346010233716,
+            "relative_risk": 1.049987662054173,
+            "prevalence": 0.018575851393188854,
+            "importance": 0.0008581701670262009
+        },
+        "position_P": {
+            "odds_ratio": 0.49273857337018767,
+            "relative_risk": 0.7367983163713239,
+            "prevalence": 0.003860863230741213,
+            "importance": 0.0006220738788408298
+        },
+        "position_FB": {
+            "odds_ratio": 0.8561532925512775,
+            "relative_risk": 0.944825920430627,
+            "prevalence": 0.0026588963758878165,
+            "importance": 0.000583053339815779
+        },
+        "time_remaining_bin_0-15 min": {
+            "odds_ratio": 1.0521037420710881,
+            "relative_risk": 1.0175236800687515,
+            "prevalence": 0.008122382079766892,
+            "importance": 0.0004399150182722269
+        },
+        "game_type_CON": {
+            "odds_ratio": 0.6496527388122046,
+            "relative_risk": 0.8423437324654921,
+            "prevalence": 0.005827718084137679,
+            "importance": 0.0002972425510126342
+        },
+        "position_LS": {
+            "odds_ratio": 0.852245995295172,
+            "relative_risk": 0.9431715366519892,
+            "prevalence": 0.003314514660353305,
+            "importance": 0.0002595862043629802
+        },
+        "game_type_SB": {
+            "odds_ratio": 0.7160975496807581,
+            "relative_risk": 0.8789239550109115,
+            "prevalence": 0.002476780185758514,
+            "importance": 0.00021635607247465357
+        },
+        "score_differential_bin_-7 to 0": {
+            "odds_ratio": 0.8598437172225718,
+            "relative_risk": 0.951267323121809,
+            "prevalence": 0.9987251866690949,
+            "importance": 0.00019017585894833873
+        },
+        "score_differential_bin_0 to 7": {
+            "odds_ratio": 1.3325418994413407,
+            "relative_risk": 1.0950119712689546,
+            "prevalence": 0.000509925332362047,
+            "importance": 7.54593479099231e-05
+        },
+        "time_remaining_bin_30-45 min": {
+            "odds_ratio": 1.0659365221278498,
+            "relative_risk": 1.0219788407092831,
+            "prevalence": 0.0007648879985430705,
+            "importance": 7.535135742571144e-05
+        },
+        "score_differential_bin_< -21": {
+            "odds_ratio": 1.0659365221278498,
+            "relative_risk": 1.0219788407092831,
+            "prevalence": 0.0007648879985430705,
+            "importance": 6.862355991675773e-05
+        }
+    },
+    "metrics": {
+        "accuracy": 0.6516117282826444,
+        "precision": 0.8435570193495265,
+        "recall": 0.5720268006700168,
+        "f1": 0.6817501247712527,
+        "auc_roc": 0.7709916938162672
+    }
+}
