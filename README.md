@@ -7,6 +7,8 @@ This project analyzes NFL player injuries using comprehensive data analysis and 
 ```
 nfl_injury_analysis/
 ├── config/                 # Configuration files
+│   ├── validation_config.yaml  # Data validation rules
+│   └── model_config.yaml      # Model configuration
 ├── data/                  # Data storage
 │   ├── raw/              # Raw data files
 │   └── processed/        # Processed datasets
@@ -18,7 +20,8 @@ nfl_injury_analysis/
 ├── src/                 # Source code
 │   ├── data/           # Data processing modules
 │   │   ├── preprocessing.py
-│   │   └── feature_engineering.py
+│   │   ├── feature_engineering.py
+│   │   └── validation.py      # Data validation system
 │   ├── models/         # Model implementation
 │   │   └── risk_factors.py  # ML model and risk analysis
 │   └── utils/          # Utility functions
@@ -26,6 +29,8 @@ nfl_injury_analysis/
 │   ├── run_risk_analysis.py  # ML model training and evaluation
 │   └── visualize_risk_factors.py
 ├── tests/              # Test suite
+│   ├── test_validation.py    # Validation system tests
+│   └── test_model.py        # Model tests
 ├── examples/           # Example usage and demos
 ├── logs/              # Application logs
 ├── visualizations/    # Generated visualizations
@@ -35,71 +40,73 @@ nfl_injury_analysis/
 
 ## Features
 
-### Currently Implemented
+### Data Validation System
 
-* **Machine Learning Implementation**
-  - Enhanced Risk Factor Analyzer with Random Forest classifier
-  - Advanced preprocessing pipeline:
-    - Numerical feature standardization
-    - Categorical feature one-hot encoding
-    - SMOTE for handling class imbalance
-  - Comprehensive model evaluation:
-    - Accuracy: 0.652
-    - Precision: 0.844
-    - Recall: 0.572
-    - F1 Score: 0.682
-    - AUC-ROC: 0.771
-  - Feature importance analysis
-  - Risk factor quantification
-  - Model persistence and versioning
+The project implements a comprehensive data validation system that ensures data quality and consistency:
 
-* **Data Processing Pipeline**
-  - Robust data loading and preprocessing
-  - Missing value handling (e.g., injury severity)
-  - Outlier detection and treatment
-  - Advanced feature engineering:
-    - Injury week percentage calculation
-    - Games played percentage
-    - Time remaining bins
-    - Score differential bins
+1. **Schema Validation**
+   - Required columns presence
+   - Unexpected columns detection
+   - Data type verification
 
-* **Risk Factor Analysis**
-  - Enhanced Risk Factor Analyzer implementation
-  - Feature importance calculation
-  - Odds ratio and relative risk analysis
-  - Prevalence calculations
-  - Comprehensive risk factor identification
+2. **Value Range Validation**
+   - Season range (2000-2024)
+   - Week range (1-18)
+   - Game statistics ranges
+   - Player participation metrics
 
-* **Visualization System**
-  - Feature importance plots
-  - Body region heatmaps
-  - Position risk scatter plots
-  - Severity distribution charts
-  - Automated visualization generation
+3. **Consistency Rules**
+   - Injury type and game status relationships
+   - Player participation consistency
+   - Injury severity and status alignment
+   - Body region and injury type correlation
 
-* **Development Infrastructure**
-  - Comprehensive logging system
-  - Unit testing framework
-  - Code coverage reporting
-  - Type hints and static type checking
-  - Modular project architecture
+4. **Cross-field Validation**
+   - Games played calculations
+   - Injury timing metrics
+   - Game situation consistency
 
-### Key Findings
+5. **Statistical Validation**
+   - Distribution checks
+   - Anomaly detection
+   - Statistical bounds verification
 
-1. **Body Region Analysis**
-   - Lower Body: Highest importance (0.2763), Odds Ratio 5.95, Prevalence 29.77%
-   - Head/Neck: High Odds Ratio (30.44) but low Prevalence (3.80%)
-   - Upper Body: Lower risk (Odds Ratio 0.95, Prevalence 7.63%)
+### Currently Implemented Analysis
 
-2. **Position-Specific Risks**
-   - CB: Higher risk (Odds Ratio 1.22, Prevalence 12.26%)
-   - QB: Lower risk (Odds Ratio 0.63, Prevalence 3.41%)
-   - WR: Moderate risk (Odds Ratio 1.21, Prevalence 13.56%)
+* **B - Body Region Analysis**
+  - Lower Body: Highest importance (0.2763), Odds Ratio 5.95, Prevalence 29.77%
+  - Head/Neck: High Odds Ratio (30.44) but low Prevalence (3.80%)
+  - Upper Body: Lower risk (Odds Ratio 0.95, Prevalence 7.63%)
+  - Other: Moderate risk (Odds Ratio varies, Prevalence 5.46%)
+  - Unknown: Lower risk (Odds Ratio 0.45, Prevalence 53.34%)
 
-3. **Injury Severity Distribution**
-   - Mild to Moderate: 79.43% of injuries
-   - Severe: 17.57% of injuries
-   - Moderate to Severe: 3.00% of injuries
+* **I - Injury Severity Analysis**
+  - Mild to Moderate: 79.43% of injuries
+  - Severe: 17.57% of injuries
+  - Moderate to Severe: 3.00% of injuries
+  - Comprehensive severity tracking
+  - Recovery time analysis
+
+* **N - Numerical Feature Engineering**
+  - Injury week percentage calculation
+  - Games played percentage
+  - Time remaining bins
+  - Score differential bins
+  - Advanced statistical features
+
+* **G - Game Context Analysis**
+  - Quarter-specific risks
+  - Down-specific patterns
+  - Score differential impact
+  - Time remaining analysis
+  - Game type variations
+
+* **O - Overall Model Performance**
+  - Accuracy: 0.652
+  - Precision: 0.844
+  - Recall: 0.572
+  - F1 Score: 0.682
+  - AUC-ROC: 0.771
 
 ## Machine Learning Implementation
 
@@ -109,6 +116,7 @@ The project implements a robust machine learning pipeline for injury risk analys
    - Feature selection and engineering
    - Handling missing values and outliers
    - Data splitting (80% training, 20% testing)
+   - Comprehensive data validation
 
 2. **Model Architecture**
    - Random Forest classifier
@@ -150,17 +158,28 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Run the risk analysis:
+1. Run the data validation:
+```bash
+python scripts/validate_data.py
+```
+
+2. Run the risk analysis:
 ```bash
 python scripts/run_risk_analysis.py
 ```
 
-2. Generate visualizations:
+3. Generate visualizations:
 ```bash
 python scripts/visualize_risk_factors.py
 ```
 
-The visualizations will be saved in the `visualizations/` directory.
+The visualizations will be saved in the `visualizations/` directory and include:
+- Injury trend analysis over time
+- Game situation analysis (quarter, down, score, time)
+- Feature importance plots
+- Body region heatmaps
+- Position risk plots
+- Severity distribution plots
 
 ## Technical Stack
 
@@ -171,9 +190,22 @@ The visualizations will be saved in the `visualizations/` directory.
   - scikit-learn for machine learning
   - imbalanced-learn for handling class imbalance
 
+* **Data Validation**
+  - Custom validation framework with rule-based validation
+  - Schema validation (required columns, data types)
+  - Value range validation (seasons, weeks, statistics)
+  - Consistency rules (injury types, game status)
+  - Cross-field validation (games played, timing metrics)
+
 * **Data Visualization**
   - matplotlib for base plotting
   - seaborn for statistical visualizations
+  - Static visualizations for:
+    - Injury trends
+    - Game situation analysis
+    - Feature importance
+    - Risk factor analysis
+    - Severity distributions
 
 * **Development Tools**
   - pytest for testing framework
@@ -195,13 +227,26 @@ The visualizations will be saved in the `visualizations/` directory.
    - Incorporate team-specific factors
    - Add temporal features for injury patterns
 
-3. **Visualization Enhancement**
-   - Interactive dashboards
-   - Real-time analysis capabilities
-   - Advanced statistical visualizations
-   - Model performance monitoring
+3. **Validation Enhancement**
+   - Add more sophisticated statistical validation
+   - Implement real-time validation
+   - Add validation rule learning
+   - Improve validation performance
 
-4. **Analysis Extension**
+4. **Visualization Enhancement**
+   - Basic statistical visualizations (matplotlib/seaborn)
+   - Injury trend analysis over time
+   - Game situation analysis (quarter, down, score, time)
+   - Feature importance and risk factor visualization
+   - Body region and position-specific risk analysis
+   - Severity distribution visualization
+   - Future plans:
+     - Interactive dashboards
+     - Real-time analysis capabilities
+     - Advanced statistical visualizations
+     - Model performance monitoring
+
+5. **Analysis Extension**
    - Team-specific risk profiles
    - Season-long injury trends
    - Recovery time analysis

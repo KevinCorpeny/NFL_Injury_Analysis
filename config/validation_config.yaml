@@ -1,0 +1,133 @@
+validation:
+  required_columns:
+    - player_name
+    - team
+    - season
+    - week
+    - injury_type
+    - game_status
+    - position
+    - body_region
+    - injury_severity
+    - games_played_before_injury
+    - total_season_games
+    - games_after_injury
+    - injury_week_percentage
+    - games_played_percentage
+    - quarter
+    - down
+    - score_differential
+    - game_seconds_remaining
+    - time_remaining_bin
+    - score_differential_bin
+
+  column_types:
+    player_name: string
+    team: string
+    season: int
+    week: int
+    injury_type: string
+    game_status: string
+    position: string
+    body_region: string
+    injury_severity: string
+    games_played_before_injury: int
+    total_season_games: int
+    games_after_injury: int
+    injury_week_percentage: float
+    games_played_percentage: float
+    quarter: int
+    down: int
+    score_differential: int
+    game_seconds_remaining: int
+    time_remaining_bin: string
+    score_differential_bin: string
+
+  value_ranges:
+    season:
+      min: 2000
+      max: 2024
+    week:
+      min: 1
+      max: 18
+    quarter:
+      min: 1
+      max: 4
+    down:
+      min: 1
+      max: 4
+    score_differential:
+      min: -100
+      max: 100
+    game_seconds_remaining:
+      min: 0
+      max: 3600
+    games_played_before_injury:
+      min: 0
+      max: 17
+    total_season_games:
+      min: 0
+      max: 17
+    games_after_injury:
+      min: 0
+      max: 17
+    injury_week_percentage:
+      min: 0.0
+      max: 1.0
+    games_played_percentage:
+      min: 0.0
+      max: 1.0
+
+  consistency_rules:
+    # Rule 1: If a player has an injury type, they must have a valid game status
+    - condition: "(injury_type.notna()) & (game_status.isin(['Out', 'Questionable', 'Doubtful', 'Active']))"
+    
+    # Rule 2: If a player is marked as injured (Out/Doubtful/Questionable), they must have an injury type
+    - condition: "(game_status.isin(['Out', 'Doubtful', 'Questionable'])) & (injury_type.notna())"
+    
+    # Rule 3: If a player has played 0 games, they can't have any games after injury
+    - condition: "(games_played_before_injury == 0) & (games_after_injury == 0)"
+    
+    # Rule 4: If a player has played all games, they can't have any games after injury
+    - condition: "(games_played_before_injury == 17) & (games_after_injury == 0)"
+    
+    # Rule 5: Injury severity should be consistent with game status
+    - condition: "~((game_status == 'Out') & (injury_severity == 'Mild'))"
+    - condition: "~((game_status == 'Questionable') & (injury_severity == 'Severe'))"
+    
+    # Rule 6: Body region should be consistent with injury type when specified
+    - condition: "~((body_region == 'Head/Neck') & (injury_type.notna()) & (~injury_type.str.contains('head|neck|concussion', case=False, na=False)))"
+    
+    # Rule 7: If a player is Out for non-injury reasons, they shouldn't have an injury type
+    - condition: "(game_status == 'Out') & (~injury_type.str.contains('injury|hurt|pain', case=False, na=True)) & (injury_type.isna())"
+    
+    # Rule 8: If a player is Active with no injury type, they shouldn't have a body region
+    - condition: "(game_status == 'Active') & (injury_type.isna()) & (body_region.isna())"
+
+  cross_field_rules:
+    - condition: "games_played_before_injury + games_after_injury == total_season_games"
+    - condition: "injury_week_percentage == week / 17"
+    - condition: "games_played_percentage == games_played_before_injury / total_season_games"
+
+  statistical_rules:
+    games_played_before_injury:
+      mean:
+        min: 5
+        max: 12
+      std:
+        min: 2
+        max: 6
+    total_season_games:
+      mean:
+        min: 8
+        max: 15
+      std:
+        min: 2
+        max: 6
+    injury_week_percentage:
+      mean:
+        min: 0.3
+        max: 0.7
+      std:
+        min: 0.1
+        max: 0.3 

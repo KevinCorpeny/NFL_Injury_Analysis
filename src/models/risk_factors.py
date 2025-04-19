@@ -294,10 +294,10 @@ class EnhancedRiskFactorAnalyzer:
             ('smote', SMOTE(random_state=42)),
             ('clf', RandomForestClassifier(
                 n_estimators=100,
-                max_depth=10,
-                min_samples_split=5,
-                min_samples_leaf=2,
-                random_state=42
+            max_depth=10,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            random_state=42
             ))
         ])
         
@@ -451,8 +451,8 @@ class EnhancedRiskFactorAnalyzer:
                 # Calculate odds ratio
                 odds_ratio = (contingency.iloc[1, 1] * contingency.iloc[0, 0]) / \
                             (contingency.iloc[1, 0] * contingency.iloc[0, 1])
-                
-                # Calculate relative risk
+            
+            # Calculate relative risk
                 risk_exposed = contingency.iloc[1, 1] / (contingency.iloc[1, 0] + contingency.iloc[1, 1])
                 risk_unexposed = contingency.iloc[0, 1] / (contingency.iloc[0, 0] + contingency.iloc[0, 1])
                 relative_risk = risk_exposed / risk_unexposed if risk_unexposed > 0 else float('inf')
@@ -464,8 +464,8 @@ class EnhancedRiskFactorAnalyzer:
                 importance = feature_importances[list(self.feature_names).index(feature)]
                 
                 results[feature] = {
-                    'odds_ratio': odds_ratio,
-                    'relative_risk': relative_risk,
+                'odds_ratio': odds_ratio,
+                'relative_risk': relative_risk,
                     'prevalence': prevalence,
                     'importance': importance
                 }

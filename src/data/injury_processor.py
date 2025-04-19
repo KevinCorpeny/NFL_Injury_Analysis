@@ -3,6 +3,7 @@ from typing import Dict, List, Any, Optional, Union
 import pandas as pd
 import numpy as np
 from src.data.base_processor import BaseProcessor
+from src.data.validation import DataValidator
 from src.config import Config
 from src.utils.logging import logger
 
@@ -25,6 +26,7 @@ class InjuryProcessor(BaseProcessor):
         self.injury_data = None
         self.plays_data = None
         self.config = config
+        self.validator = DataValidator(config)
     
     def load_data(self) -> pd.DataFrame:
         """Load the injury data from CSV file.
@@ -327,21 +329,49 @@ class InjuryProcessor(BaseProcessor):
     
     def _validate_data(self) -> None:
         """Validate the processed injury data."""
-        # Check for required columns
-        required_columns = ['season', 'week', 'player_name', 'position', 'team']
-        missing_columns = [col for col in required_columns if col not in self.injury_data.columns]
+        if self.injury_data is None:
+            raise ValueError("No data to validate. Run process() first.")
+            
+        logger.info("Validating injury data...")
         
-        if missing_columns:
-            error_msg = f"Missing required columns in injury data: {missing_columns}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+        # Run comprehensive validation
+        validation_results = self.validator.validate_all(self.injury_data)
         
-        # Check for duplicate records
-        duplicate_count = self.injury_data.duplicated().sum()
-        if duplicate_count > 0:
-            logger.warning(f"Found {duplicate_count} duplicate records in injury data")
-            self.injury_data = self.injury_data.drop_duplicates()
-            logger.info("Removed duplicate records")
+        # Check for critical validation failures
+        critical_issues = []
+        
+        # Check for missing required columns
+        if validation_results['schema']['missing_columns']:
+            critical_issues.append(f"Missing required columns: {validation_results['schema']['missing_columns']}")
+            
+        # Check for type mismatches
+        if validation_results['data_types']['type_mismatches']:
+            critical_issues.append(f"Type mismatches: {validation_results['data_types']['type_mismatches']}")
+            
+        # Check for value range violations
+        if validation_results['value_ranges']['range_violations']:
+            critical_issues.append(f"Value range violations: {validation_results['value_ranges']['range_violations']}")
+            
+        # Check for consistency issues
+        if validation_results['consistency']['consistency_issues']:
+            critical_issues.append(f"Consistency issues: {validation_results['consistency']['consistency_issues']}")
+            
+        # Check for cross-field validation issues
+        if validation_results['cross_field']['cross_field_issues']:
+            critical_issues.append(f"Cross-field validation issues: {validation_results['cross_field']['cross_field_issues']}")
+            
+        # Log all issues
+        if critical_issues:
+            for issue in critical_issues:
+                logger.error(issue)
+            raise ValueError("Data validation failed. See logs for details.")
+            
+        # Log statistical issues as warnings
+        if validation_results['statistics']['statistical_issues']:
+            for col, issues in validation_results['statistics']['statistical_issues'].items():
+                logger.warning(f"Statistical anomalies in {col}: {issues}")
+                
+        logger.info("Data validation completed successfully")
     
     def _select_features(self) -> None:
         """Select relevant features based on the configuration."""
