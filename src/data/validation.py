@@ -3,44 +3,38 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from src.utils.logging import logger
+from src.config import ValidationConfig
 
 class DataValidator:
     """Class for comprehensive data validation of NFL injury data."""
     
-    def __init__(self, config: dict):
-        """Initialize the validator with configuration.
-        
-        Args:
-            config: Configuration dictionary containing validation rules
-        """
+    def __init__(self, config: ValidationConfig):
         self.config = config
-        self.validation_rules = config.get('validation', {})
         self.validation_results = {}
         
     def validate_schema(self, data: pd.DataFrame) -> Dict[str, List[str]]:
-        """Validate the schema of the data against expected columns.
-        
-        Args:
-            data: DataFrame to validate
-            
-        Returns:
-            Dictionary with validation results
+        """Check required columns and if configured, allow columns
         """
-        results = {'missing_columns': [], 'extra_columns': []}
-        expected_columns = self.validation_rules.get('required_columns', [])
-        
-        # Check for missing required columns
-        missing_cols = [col for col in expected_columns if col not in data.columns]
-        if missing_cols:
-            results['missing_columns'] = missing_cols
-            logger.error(f"Missing required columns: {missing_cols}")
-            
-        # Check for unexpected columns
-        extra_cols = [col for col in data.columns if col not in expected_columns]
-        if extra_cols:
-            results['extra_columns'] = extra_cols
-            logger.warning(f"Unexpected columns found: {extra_cols}")
-            
+        results = {
+            'missing_columns': [],
+            'extra_columns': []
+        }
+
+        required = self.config.required_columns
+        allowed = self.config.allowed_columns
+
+        results['missing_columns'] = [col for col in required if col not in data.columns]
+
+        if allowed:
+            #only flag extras if a full allowed-columns list was configured
+            results['extra_columns'] = [col for col in data.columns if col not in allowed]
+
+        if results['missing_columns']:
+            logger.error(f"Missing columns: {results['missing_columns']}")
+
+        if results['extra_columns']:
+            logger.warning(f"Extra columns: {results['extra_columns']}")
+
         return results
     
     def validate_data_types(self, data: pd.DataFrame) -> Dict[str, List[str]]:
@@ -248,7 +242,7 @@ class DataValidator:
         """
         type_mapping = {
             'int': ['int64', 'int32', 'int16', 'int8'],
-            'float': ['float64', 'float32'],
+            'float': ['float64', 'float32', 'float16'],
             'string': ['object', 'string'],
             'datetime': ['datetime64[ns]']
         }

@@ -18,7 +18,7 @@ def main():
         # Save processed play data
         play_output_path = Path(config.data.processed_data_path) / "processed_plays.parquet"
         play_processor.save_data(play_data, play_output_path)
-        
+
         # Process injury data
         logger.info("Processing injury data")
         injury_processor = InjuryProcessor(config)

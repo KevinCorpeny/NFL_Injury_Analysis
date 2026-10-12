@@ -12,21 +12,22 @@ class InjuryProcessor(BaseProcessor):
     
     This class is responsible for loading, processing, and validating NFL injury data.
     """
-    
-    def __init__(self, config: dict):
+
+    def __init__(self, config: Config):
         """Initialize the injury processor.
         
         Args:
             config: Configuration dictionary with processing parameters
         """
         super().__init__(config)
-        self.injury_features = config.get('features', {}).get('injury_features', [])
-        self.injury_data_path = Path(config.get('data', {}).get('injury_data_path', ''))
-        self.processed_injury_path = Path(config.get('data', {}).get('processed_data_path', ''))
+        self.config = config
+        self.injury_features = getattr(config, 'injury_features', [])
+        self.injury_data_path = config.data.injury_data_path
+        self.processed_injury_data_path = config.data.processed_data_path
+        self.validator = DataValidator({})
         self.injury_data = None
         self.plays_data = None
-        self.config = config
-        self.validator = DataValidator(config)
+
     
     def load_data(self) -> pd.DataFrame:
         """Load the injury data from CSV file.
@@ -56,12 +57,13 @@ class InjuryProcessor(BaseProcessor):
         logger.info(f"Loaded {len(self.injury_data)} injury records")
         
         # Load plays data for game situation information
-        plays_path = Path(self.config.get('data', {}).get('processed_data_path', '')) / "processed_plays.parquet"
+        plays_path = Path(self.config.data.processed_data_path / "processed_plays.parquet")
         if plays_path.exists():
             self.plays_data = pd.read_parquet(plays_path)
             # Convert week and season to integers in plays data
             self.plays_data['week'] = self.plays_data['week'].astype(int)
             self.plays_data['season'] = self.plays_data['season'].astype(int)
+
             logger.info(f"Loaded {len(self.plays_data)} plays")
         else:
             logger.error(f"Plays data not found at {plays_path}")
